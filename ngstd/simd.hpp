@@ -902,6 +902,9 @@ namespace ngstd
   INLINE SIMD<int64_t,N> & operator-= (SIMD<int64_t,N> & a, SIMD<int64_t,N> b) { a.Data()-=b.Data(); return a; }
   template <int N>  
   INLINE SIMD<int64_t,N> & operator-= (SIMD<int64_t,N> & a, int64_t b) { a-=SIMD<int64_t,N>(b); return a; }
+#ifndef __SSE__
+  INLINE SIMD<int64_t,2> operator-= (SIMD<int64_t,2> a, SIMD<int64_t,2> b) { a[0]-=b[0]; a[1]-=b[1]; return a; }
+#endif
 
   
   template <int N>
@@ -966,6 +969,9 @@ namespace ngstd
   INLINE SIMD<double,N> & operator+= (SIMD<double,N> & a, double b) { a+=SIMD<double,N>(b); return a; }
   template <int N>  
   INLINE SIMD<double,N> & operator-= (SIMD<double,N> & a, SIMD<double,N> b) { a.Data()-=b.Data(); return a; }
+#ifndef __SSE__
+  INLINE SIMD<double,2> operator-= (SIMD<double,2> a, SIMD<double,2> b) { a[0]-=b[0]; a[1]-=b[1]; return a; }
+#endif
   template <int N>  
   INLINE SIMD<double,N> & operator-= (SIMD<double,N> & a, double b) { a-=SIMD<double,N>(b); return a; }
   template <int N>  
@@ -974,10 +980,13 @@ namespace ngstd
   INLINE SIMD<double,N> & operator*= (SIMD<double,N> & a, double b) { a*=SIMD<double,N>(b); return a; }
   template <int N>  
   INLINE SIMD<double,N> & operator/= (SIMD<double,N> & a, SIMD<double,N> b) { a.Data()/=b.Data(); return a; }
+#ifndef __SSE__
+  INLINE SIMD<double,2> operator/= (SIMD<double,2> a, SIMD<double,2> b) { a[0]/=b[0]; a[1]/=b[1]; return a; }
+#endif
 
   template <int N>    
   INLINE SIMD<double,N> L2Norm2 (SIMD<double,N> a) { return a.Data()*a.Data(); }
-  template <int N>
+  template <int N>    
   INLINE SIMD<double,N> Trans (SIMD<double,N> a) { return a; }
 
 
