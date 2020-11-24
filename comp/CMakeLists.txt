@@ -36,7 +36,7 @@ install( FILES
         l2hofespace.hpp hdivdivsurfacespace.hpp tpfes.hpp linearform.hpp meshaccess.hpp ngsobject.hpp	   
         postproc.hpp preconditioner.hpp vectorfacetfespace.hpp
         normalfacetfespace.hpp hypre_precond.hpp h1amg.hpp
-        pde.hpp numproc.hpp vtkoutput.hpp pmltrafo.hpp periodic.hpp
+        pde.hpp numproc.hpp numberfespace.hpp vtkoutput.hpp pmltrafo.hpp periodic.hpp
         discontinuous.hpp reorderedfespace.hpp hypre_ams_precond.hpp facetsurffespace.hpp compressedfespace.hpp
         python_comp.hpp fesconvert.hpp contact.hpp interpolate.hpp
         DESTINATION ${NGSOLVE_INSTALL_DIR_INCLUDE}
