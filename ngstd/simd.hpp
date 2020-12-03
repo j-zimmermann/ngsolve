@@ -481,7 +481,7 @@ namespace ngstd
     INLINE auto operator[] (int i) const { return data[i]; }
     INLINE auto & operator[] (int i) { return data[i]; }
     INLINE auto Data() const {return *this;}
-    INLINE auto Data() {return *this;}
+    INLINE auto & Data() {return *this;}
 //     INLINE int64_t* Data() const { return data; }
 //     INLINE int64_t* & Data() { return data; }
   };
@@ -542,7 +542,7 @@ namespace ngstd
 //     INLINE double* Data() const { return data; }
 //     INLINE double* & Data() { return data; }
     INLINE auto Data() const {return *this;}
-    INLINE auto Data() {return *this;}
+    INLINE auto & Data() {return *this;}
 
     operator tuple<double&,double&> ()
     { return tuple<double&,double&>((*this)[0], (*this)[1]); }
