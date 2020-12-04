@@ -152,7 +152,7 @@ namespace ngcomp
   {
     type = "hcurlho";
     name="HCurlHighOrderFESpace(hcurlho)";
-    
+
     // define flags
     DefineDefineFlag("hcurlho");
     DefineNumFlag("face");
@@ -282,6 +282,38 @@ namespace ngcomp
         flux_evaluator[BND] = make_shared<T_DifferentialOperator<DiffOpCurlBoundaryEdgeVec<>>>();
 	evaluator[BBND] = make_shared<T_DifferentialOperator<DiffOpIdBBoundaryEdge<3>>>();
       }
+
+    switch (ma->GetDimension())
+      {
+      case 1:
+        additional_evaluators.Set ("grad", make_shared<T_DifferentialOperator<DiffOpGradientHCurl<1>>> ()); break;
+      case 2:
+        additional_evaluators.Set ("grad", make_shared<T_DifferentialOperator<DiffOpGradientHCurl<2>>> ());
+        additional_evaluators.Set ("dual", make_shared<T_DifferentialOperator<DiffOpHCurlDual<2>>> ());
+        break;
+      case 3:
+        additional_evaluators.Set ("grad", make_shared<T_DifferentialOperator<DiffOpGradientHCurl<3>>> ());
+        additional_evaluators.Set ("dual", make_shared<T_DifferentialOperator<DiffOpHCurlDual<3>>> ());
+        break;
+      default:
+        ;
+      }
+
+    this->GetMemoryTracer().Track(
+        order_edge, "order_edge",
+        fine_edge, "fine_edge",
+        fine_face, "fine_face",
+        cell_ngrad, "cell_ngrad",
+        face_ngrad, "face_ngrad",
+        order_face, "order_face",
+        order_inner, "order_inner",
+        order_avertex, "order_avertex",
+        usegrad_edge, "usegrad_edge",
+        usegrad_face, "usegrad_face",
+        usegrad_cell, "usegrad_cell",
+        dom_order_min, "dom_order_min",
+        dom_order_max, "dom_order_max"
+        );
   }
   
   HCurlHighOrderFESpace :: ~HCurlHighOrderFESpace () { ; }
@@ -1667,31 +1699,7 @@ namespace ngcomp
         return;
       }
     dnums = GetElementDofs (elnr);
-  }
-
-
-  SymbolTable<shared_ptr<DifferentialOperator>>
-  HCurlHighOrderFESpace :: GetAdditionalEvaluators () const
-  {
-    SymbolTable<shared_ptr<DifferentialOperator>> additional;
-    switch (ma->GetDimension())
-      {
-      case 1:
-        additional.Set ("grad", make_shared<T_DifferentialOperator<DiffOpGradientHCurl<1>>> ()); break;
-      case 2:
-        additional.Set ("grad", make_shared<T_DifferentialOperator<DiffOpGradientHCurl<2>>> ());
-        additional.Set ("dual", make_shared<T_DifferentialOperator<DiffOpHCurlDual<2>>> ());
-        break;
-      case 3:
-        additional.Set ("grad", make_shared<T_DifferentialOperator<DiffOpGradientHCurl<3>>> ());
-        additional.Set ("dual", make_shared<T_DifferentialOperator<DiffOpHCurlDual<3>>> ());
-        break;
-      default:
-        ;
-      }
-    return additional;
-  }
-  
+  }  
 
 
   

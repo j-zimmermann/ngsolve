@@ -304,6 +304,14 @@ lot of new non-zero entries in the matrix!\n" << endl;
 
     for (auto & et : et_bonus_order) et = 0;
     et_bonus_order[ET_QUAD] = int (flags.GetNumFlag("quadbonus",0));
+
+    this->GetMemoryTracer().Track(
+        dirichlet_dofs, "dirichlet_dofs",
+        dirichlet_vertex, "dirichlet_vertex",
+        dirichlet_edge, "dirichlet_edge",
+        dirichlet_face, "dirichlet_face",
+        ctofdof, "ctofdof"
+    );
   }
 
   
@@ -370,7 +378,7 @@ lot of new non-zero entries in the matrix!\n" << endl;
     docu.Arg("order_policy") = "ORDER_POLICY = ORDER_POLICY.OLDSTYLE\n"
       "  CONSTANT .. use the same fixed order for all elements,\n"
       "  NODAL ..... use the same order for nodes of same shape,\n"
-      "  VARIBLE ... use an individual order for each edge, face and cell,\n"
+      "  VARIABLE ... use an individual order for each edge, face and cell,\n"
       "  OLDSTYLE .. as it used to be for the last decade";
     return docu;
   }
