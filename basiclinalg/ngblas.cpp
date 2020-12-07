@@ -3837,10 +3837,9 @@ namespace ngbla
 				double * pb, size_t db,
 				const BitArray & ba)
   {
-    double sum = 0;
     double vhsum[8] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
     int i(0);
-    for ( ; i+8 < n; i += 8)
+    for ( ; i+8 <= n; i += 8)
       {
 	for (int j = 0; j < 8; j++)
 	  {
@@ -3851,7 +3850,7 @@ namespace ngbla
       }
     for ( ; i < n; i++)
       if (ba.Test(i))
-	sum += pa[i]*pb[i];
+	vhsum[0] += pa[i]*pb[i];
     for (int j = 1; j < 8; j++)
       vhsum[0] += vhsum[j];
     return vhsum[0];
