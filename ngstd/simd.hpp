@@ -215,7 +215,7 @@ namespace ngstd
     int64_t operator[] (int i) const { return ((int64_t*)(&mask))[i]; }    
   };
 #else
-  template <> 
+  template <>
   class SIMD<mask64,2>
   {
     bool mask[2];
@@ -228,8 +228,8 @@ namespace ngstd
     { ; }
     // SIMD (__m128i _mask) : mask(_mask) { ; }
     // bool* Data() const { return mask; }
-    static constexpr int Size() { return 2; }    
-    bool operator[] (int i) const { return mask[i]; }    
+    static constexpr int Size() { return 2; }
+    bool operator[] (int i) const { return mask[i]; }
   };
 
 #endif
@@ -451,10 +451,10 @@ namespace ngstd
   
 #else //  NETGEN_ARCH_AMD64
   template<>
-  class SIMD<int64_t,2> 
+  class SIMD<int64_t,2>
   {
     int64_t data[2];
-    
+
   public:
     static constexpr int Size() { return 2; }
     SIMD () {}
@@ -464,33 +464,31 @@ namespace ngstd
         data[0] = v0;
         data[1] = v1;
       }
-    
+
     SIMD & operator= (const SIMD &) = default;
 
     SIMD (int64_t val) { data[0] = data[1] = val; }
 
     template<typename T, typename std::enable_if<std::is_convertible<T, std::function<int64_t(int)>>::value, int>::type = 0>
     SIMD (const T & func)
-    {   
+    {
       data[0] = func(0);
       data[1] = func(1);
     }
-    
+
     INLINE auto operator[] (int i) const { return data[i]; }
     INLINE auto & operator[] (int i) { return data[i]; }
     INLINE auto Data() const {return *this;}
-    INLINE auto Data() {return *this;}
-//     INLINE int64_t* Data() const { return data; }
-//     INLINE int64_t* & Data() { return data; }
+    INLINE auto & Data() {return *this;}
   };
 
 
-  
+
   template<>
   class SIMD<double,2>
   {
     double data[2];
-    
+
   public:
     static constexpr int Size() { return 2; }
     SIMD () {}
@@ -500,7 +498,7 @@ namespace ngstd
         data[0] = v0;
         data[1] = v1;
       }
-    
+
     SIMD & operator= (const SIMD &) = default;
 
     SIMD (double val) { data[0] = data[1] = val; }
@@ -527,20 +525,18 @@ namespace ngstd
     {
       if (mask[0]) p[0] = data[0];
       if (mask[1]) p[1] = data[1];
-    }    
-    
+    }
+
     template<typename T, typename std::enable_if<std::is_convertible<T, std::function<double(int)>>::value, int>::type = 0>                                                                    SIMD (const T & func)
-    {   
+    {
       data[0] = func(0);
       data[1] = func(1);
-    }   
-    
+    }
+
     INLINE double operator[] (int i) const { return data[i]; }
     INLINE double & operator[] (int i) { return data[i]; }
-//     INLINE double* Data() const { return data; }
-//     INLINE double* & Data() { return data; }
     INLINE auto Data() const {return *this;}
-    INLINE auto Data() {return *this;}
+    INLINE auto & Data() {return *this;}
 
     operator tuple<double&,double&> ()
     { return tuple<double&,double&>((*this)[0], (*this)[1]); }
@@ -987,7 +983,7 @@ namespace ngstd
 
   template <int N>    
   INLINE SIMD<double,N> L2Norm2 (SIMD<double,N> a) { return a.Data()*a.Data(); }
-  template <int N>    
+  template <int N>
   INLINE SIMD<double,N> Trans (SIMD<double,N> a) { return a; }
 
 
@@ -1103,8 +1099,8 @@ namespace ngstd
   using std::floor;
   INLINE SIMD<double,2> floor (SIMD<double,2> a)
   { return ngstd::SIMD<double,2>([&](int i)->double { return floor(a[i]); } ); }
-  using std::ceil;  
-  INLINE SIMD<double,2> ceil (SIMD<double,2> a) 
+  using std::ceil;
+  INLINE SIMD<double,2> ceil (SIMD<double,2> a)
   { return ngstd::SIMD<double,2>([&](int i)->double { return ceil(a[i]); } ); }
 
   INLINE SIMD<mask64,2> operator<= (SIMD<double,2> a , SIMD<double,2> b)
@@ -1133,8 +1129,8 @@ namespace ngstd
   INLINE SIMD<mask64,2> operator!= (SIMD<int64_t,2> a , SIMD<int64_t,2> b)
   { return {a[0]!=b[0], a[1]!=b[1]}; }
 
-  
-  
+
+
  INLINE SIMD<mask64,2> operator&& (SIMD<mask64,2> a, SIMD<mask64,2> b)
   { return {a[0]&&b[0], a[1]&&b[1]}; }
   INLINE SIMD<mask64,2> operator|| (SIMD<mask64,2> a, SIMD<mask64,2> b)
@@ -1145,13 +1141,13 @@ namespace ngstd
   {
     return { a[0] ? b[0]:c[0], a[1] ? b[1]:c[1] };
   }
-  
+
   INLINE SIMD<double,2> IfPos (SIMD<double,2> a, SIMD<double,2> b, SIMD<double,2> c)
   { return ngstd::SIMD<double,2>([&](int i)->double { return a[i]>0 ? b[i] : c[i]; }); }
   INLINE SIMD<double,2> IfZero (SIMD<double,2> a, SIMD<double,2> b, SIMD<double,2> c)
   { return ngstd::SIMD<double,2>([&](int i)->double { return a[i]==0. ? b[i] : c[i]; }); }
 
-  
+
   INLINE double HSum (SIMD<double,2> sd)
   {
     return sd[0]+sd[1];
