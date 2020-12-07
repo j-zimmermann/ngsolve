@@ -3,7 +3,9 @@
 
 // optimized matrix kernels
 
-#ifdef __clang__
+#include <core/ngcore_api.hpp>
+
+#if defined(NETGEN_ARCH_AMD64) && defined(__clang__)
 #define REGCALL __regcall
 #else
 #define REGCALL
