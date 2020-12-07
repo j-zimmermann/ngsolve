@@ -3278,7 +3278,7 @@ namespace ngfem
     this->size = (ir.Size()+SIMD<IntegrationPoint>::Size()-1) / SIMD<IntegrationPoint>::Size();
     
     this -> mem_to_delete = (SIMD<IntegrationPoint>*)
-      _mm_malloc(this->size*sizeof(SIMD<IntegrationPoint>), SIMD<double>::Size()*sizeof(double));
+      malloc(this->size*sizeof(SIMD<IntegrationPoint>));
     this->data = this->mem_to_delete;
     
     dimension = ir.Dim();

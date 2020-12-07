@@ -10,6 +10,7 @@
 #ifdef NGS_PYTHON
 #include <core/python_ngcore.hpp>
 #endif // NGS_PYTHON
+#include <core/utils.hpp>
 
 #include <ngstd.hpp>
 #include <nginterface.h>
@@ -146,11 +147,19 @@ namespace ngcomp
       Mat<4*DIMS,DIMR,SIMD<double>> x;
       Mat<4*DIMS,DIMR*DIMS,SIMD<double>> dx;
 
+#ifdef NETGEN_HAVE_SIMD
       mesh->mesh.MultiElementTransformation <DIMS,DIMR>
         (elnr, 4*DIMS,
          &pnts(0,0).Data(), &pnts(1,0)-&pnts(0,0), 
          &x(0,0).Data(), &x(1,0)-&x(0,0), 
          &dx(0,0).Data(), &dx(1,0)-&dx(0,0));
+#else // NETGEN_HAVE_SIMD
+      mesh->mesh.MultiElementTransformation <DIMS,DIMR>
+        (elnr, 4*DIMS,
+         &pnts(0,0)[0], &pnts(1,0)-&pnts(0,0),
+         &x(0,0)[0], &x(1,0)-&x(0,0),
+         &dx(0,0)[0], &dx(1,0)-&dx(0,0));
+#endif // NETGEN_HAVE_SIMD
       
       for (int i = 0; i < DIMR; i++)
         for (int j = 0; j < DIMS; j++)
@@ -208,11 +217,19 @@ namespace ngcomp
       SIMD_MappedIntegrationRule<DIMS,DIMR> & mir = 
 	static_cast<SIMD_MappedIntegrationRule<DIMS,DIMR> &> (bmir);
       
+#ifdef NETGEN_HAVE_SIMD
       mesh->mesh.MultiElementTransformation <DIMS,DIMR>
         (elnr, ir.Size(),
          &ir[0](0).Data(), ir.Size()>1 ? &ir[1](0)-&ir[0](0) : 0,
          &mir[0].Point()(0).Data(), ir.Size()>1 ? &mir[1].Point()(0)-&mir[0].Point()(0) : 0, 
          &mir[0].Jacobian()(0,0).Data(), ir.Size()>1 ? &mir[1].Jacobian()(0,0)-&mir[0].Jacobian()(0,0) : 0);
+#else // NETGEN_HAVE_SIMD
+      mesh->mesh.MultiElementTransformation <DIMS,DIMR>
+        (elnr, ir.Size(),
+         &ir[0](0)[0], ir.Size()>1 ? &ir[1](0)-&ir[0](0) : 0,
+         &mir[0].Point()(0)[0], ir.Size()>1 ? &mir[1].Point()(0)-&mir[0].Point()(0) : 0,
+         &mir[0].Jacobian()(0,0)[0], ir.Size()>1 ? &mir[1].Jacobian()(0,0)-&mir[0].Jacobian()(0,0) : 0);
+#endif // NETGEN_HAVE_SIMD
       
       for (int i = 0; i < ir.Size(); i++)
         mir[i].Compute();
@@ -2497,13 +2514,13 @@ namespace ngcomp
   atomic<size_t> ProgressOutput :: cnt;
   thread_local size_t ProgressOutput :: thd_cnt = 0;
   // thread_local double ProgressOutput :: thd_prev_time = WallTime();
-  thread_local size_t ProgressOutput :: thd_prev_time = __rdtsc();
-  size_t tsc_wait = 0.05*2.7e9; // rough 
+  thread_local size_t ProgressOutput :: thd_prev_time = GetTimeCounter();
+  size_t tsc_wait = 0.05*(1.0/seconds_per_tick);
   void ProgressOutput :: Update ()
   {
     thd_cnt++;
     // double time = WallTime();
-    size_t time = __rdtsc();
+    auto time = GetTimeCounter();
     // if (time > thd_prev_time+0.05)
     if (time > thd_prev_time+tsc_wait)
       {

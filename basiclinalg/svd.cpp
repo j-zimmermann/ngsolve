@@ -562,7 +562,6 @@ namespace ngbla
     // cout << "upperbound = " << upperbound << endl;
 
     tb.Start();
-    /*
       for (int i = 0; i < n; i++)
       {
       double l = 0, u = upperbound;
@@ -575,8 +574,7 @@ namespace ngbla
       }
       singvals[i] = l;      
       }
-    */
-
+/*
     for (size_t i = 0; i < n; i += SIMD<double>::Size())
       {
         SIMD<double> l = 0.0, u = upperbound;
@@ -591,6 +589,7 @@ namespace ngbla
         SIMD<mask64> mask(n-i);
         l.Store (&singvals[i], mask);
       }
+*/
 
 
   
