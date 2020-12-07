@@ -7,7 +7,12 @@
 /* Date:   25. Mar. 16                                                    */
 /**************************************************************************/
 
-// #include <immintrin.h>
+#include <core/ngcore_api.hpp>
+
+#ifdef NETGEN_ARCH_AMD64
+#include <immintrin.h>
+#endif
+
 
 #ifdef WIN32
 #ifndef AVX_OPERATORS_DEFINED
@@ -77,27 +82,15 @@ INLINE __m256i operator-= (__m256i &a, __m256i b) { return a = a-b; }
 namespace ngstd
 {
 
-  // MSVC does not define SSE. It's always present on 64bit cpus
-#if (defined(_M_AMD64) || defined(_M_X64) || defined(__AVX__))
-#ifndef __SSE__
-#define __SSE__
-#endif
-#ifndef __SSE2__
-#define __SSE2__
-#endif
-#endif
-
-
-  
   constexpr int GetDefaultSIMDSize() {
 #if defined __AVX512F__
     return 8;
 #elif defined __AVX__
     return 4;
-#elif defined __SSE__
+#elif defined NETGEN_ARCH_AMD64
     return 2;
 #else
-    return 2;
+    return 2; // implement simd 2 and 4 manually
 #endif
   }
   
@@ -107,7 +100,7 @@ namespace ngstd
 #elif defined __AVX__
     typedef __m256 tAVX;
     typedef __m256d tAVXd; 
-#elif defined __SSE__
+#elif defined NETGEN_ARCH_AMD64
     typedef __m128 tAVX;
     typedef __m128d tAVXd; 
 #endif
@@ -161,7 +154,7 @@ namespace ngstd
 
   // #endif
 
-#ifdef __SSE__
+#ifdef NETGEN_ARCH_AMD64
 #ifndef __AVX__
   INLINE __m128i my_mm_cmpgt_epi64(__m128i a, __m128i b) {
     auto  res_lo = _mm_cvtsi128_si64(a)  > _mm_cvtsi128_si64(b) ? -1:0;
@@ -206,7 +199,7 @@ namespace ngstd
   };
 
 
-#ifdef __SSE__
+#ifdef NETGEN_ARCH_AMD64
   template <> 
   class SIMD<mask64,2>
   {
@@ -353,7 +346,7 @@ namespace ngstd
   };
   
 
-#ifdef __SSE__
+#ifdef NETGEN_ARCH_AMD64
 
   template<>
   class SIMD<int64_t,2> 
@@ -451,7 +444,7 @@ namespace ngstd
                       SIMD<double,2>(_mm_unpackhi_pd(a.Data(),b.Data())));
   }
   
-#else //  __SSE__
+#else //  NETGEN_ARCH_AMD64
   template<>
   class SIMD<int64_t,2> 
   {
@@ -553,7 +546,7 @@ namespace ngstd
     return make_tuple(SIMD<double,2>(a[0], b[0]),
                       SIMD<double,2>(a[1], b[1]));
   }
-#endif //  __SSE__
+#endif //  NETGEN_ARCH_AMD64
 
   
   
@@ -863,7 +856,7 @@ namespace ngstd
 #ifndef __AVX__
   INLINE SIMD<int64_t,4> operator+ (SIMD<int64_t,4> a, SIMD<int64_t,4> b) { return { a.Lo()+b.Lo(), a.Hi()+b.Hi() }; }
 #endif
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<int64_t,2> operator+ (SIMD<int64_t,2> a, SIMD<int64_t,2> b) { return { a[0]+b[0], a[1]+b[1] }; }
 #endif
   
@@ -876,7 +869,7 @@ namespace ngstd
 #ifndef __AVX__
   INLINE SIMD<int64_t,4> operator- (SIMD<int64_t,4> a, SIMD<int64_t,4> b) { return { a.Lo()-b.Lo(), a.Hi()-b.Hi() }; }
 #endif
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<int64_t,2> operator- (SIMD<int64_t,2> a, SIMD<int64_t,2> b) { return { a[0]-b[0], a[1]-b[1] }; }
 #endif
 
@@ -889,7 +882,7 @@ namespace ngstd
 #ifndef __AVX__
   INLINE SIMD<int64_t,4> operator- (SIMD<int64_t,4> a) { return { -a.Lo(), -a.Hi() }; }
 #endif
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<int64_t,2> operator- (SIMD<int64_t,2> a) { return { -a[0], -a[1] }; }
 #endif
   
@@ -902,7 +895,7 @@ namespace ngstd
   INLINE SIMD<int64_t,N> & operator-= (SIMD<int64_t,N> & a, SIMD<int64_t,N> b) { a.Data()-=b.Data(); return a; }
   template <int N>  
   INLINE SIMD<int64_t,N> & operator-= (SIMD<int64_t,N> & a, int64_t b) { a-=SIMD<int64_t,N>(b); return a; }
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<int64_t,2> operator-= (SIMD<int64_t,2> a, SIMD<int64_t,2> b) { a[0]-=b[0]; a[1]-=b[1]; return a; }
 #endif
 
@@ -912,7 +905,7 @@ namespace ngstd
 #ifndef __AVX__
   INLINE SIMD<double,4> operator+ (SIMD<double,4> a, SIMD<double,4> b) { return { a.Lo()+b.Lo(), a.Hi()+b.Hi() }; }
 #endif
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<double,2> operator+ (SIMD<double,2> a, SIMD<double,2> b) { return { a[0]+b[0], a[1]+b[1] }; }
 #endif
   
@@ -925,7 +918,7 @@ namespace ngstd
 #ifndef __AVX__
   INLINE SIMD<double,4> operator- (SIMD<double,4> a, SIMD<double,4> b) { return { a.Lo()-b.Lo(), a.Hi()-b.Hi() }; }
 #endif
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<double,2> operator- (SIMD<double,2> a, SIMD<double,2> b) { return { a[0]-b[0], a[1]-b[1] }; }
 #endif
 
@@ -938,7 +931,7 @@ namespace ngstd
 #ifndef __AVX__
   INLINE SIMD<double,4> operator- (SIMD<double,4> a) { return { -a.Lo(), -a.Hi() }; }
 #endif
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<double,2> operator- (SIMD<double,2> a) { return { -a[0], -a[1] }; }
 #endif
   
@@ -947,7 +940,7 @@ namespace ngstd
 #ifndef __AVX__
   INLINE SIMD<double,4> operator* (SIMD<double,4> a, SIMD<double,4> b) { return { a.Lo()*b.Lo(), a.Hi()*b.Hi() }; }
 #endif
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<double,2> operator* (SIMD<double,2> a, SIMD<double,2> b) { return { a[0]*b[0], a[1]*b[1] }; }
 #endif
   template <int N>  
@@ -956,7 +949,7 @@ namespace ngstd
   INLINE SIMD<double,N> operator* (SIMD<double,N> b, double a) { return SIMD<double,N>(a)*b; }
   template <int N>  
   INLINE SIMD<double,N> operator/ (SIMD<double,N> a, SIMD<double,N> b) { return a.Data()/b.Data(); }
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<double,2> operator/ (SIMD<double,2> a, SIMD<double,2> b) { return { a[0]/b[0], a[1]/b[1] }; }
 #endif
   template <int N>  
@@ -969,7 +962,7 @@ namespace ngstd
   INLINE SIMD<double,N> & operator+= (SIMD<double,N> & a, double b) { a+=SIMD<double,N>(b); return a; }
   template <int N>  
   INLINE SIMD<double,N> & operator-= (SIMD<double,N> & a, SIMD<double,N> b) { a.Data()-=b.Data(); return a; }
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<double,2> operator-= (SIMD<double,2> a, SIMD<double,2> b) { a[0]-=b[0]; a[1]-=b[1]; return a; }
 #endif
   template <int N>  
@@ -980,7 +973,7 @@ namespace ngstd
   INLINE SIMD<double,N> & operator*= (SIMD<double,N> & a, double b) { a*=SIMD<double,N>(b); return a; }
   template <int N>  
   INLINE SIMD<double,N> & operator/= (SIMD<double,N> & a, SIMD<double,N> b) { a.Data()/=b.Data(); return a; }
-#ifndef __SSE__
+#ifndef NETGEN_ARCH_AMD64
   INLINE SIMD<double,2> operator/= (SIMD<double,2> a, SIMD<double,2> b) { a[0]/=b[0]; a[1]/=b[1]; return a; }
 #endif
 
@@ -993,7 +986,7 @@ namespace ngstd
   INLINE double IfPos (double a, double b, double c) { return a>0 ? b : c; }
   INLINE double IfZero (double a, double b, double c) { return a==0. ? b : c; }
   
-#ifdef __SSE__
+#ifdef NETGEN_ARCH_AMD64
 
   
   INLINE __m128d my_mm_hadd_pd(__m128d a, __m128d b) {
@@ -1731,7 +1724,7 @@ namespace ngstd
     return masks_from_4bits[i & 15];
   }
 
-#elif defined __SSE__
+#elif defined NETGEN_ARCH_AMD64
 
   static SIMD<mask64, 2> masks_from_2bits[4] = {
     _mm_set_epi32 (0,0,0,0), _mm_set_epi32 (0,0,-1,0),
