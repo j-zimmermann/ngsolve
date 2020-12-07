@@ -281,6 +281,10 @@ namespace ngstd
       : mask(_mm512_cmpgt_epi64_mask(_mm512_set1_epi64(i),
                                      _mm512_set_epi64(7, 6, 5, 4, 3, 2, 1, 0)))
     { ; }
+    SIMD (int64_t i)
+      : mask(_mm512_cmpgt_epi64_mask(_mm512_set1_epi64(i),
+                                     _mm512_set_epi64(7, 6, 5, 4, 3, 2, 1, 0)))
+    { ; }
     SIMD (__mmask8 _mask) : mask(_mask) { ; }        
     __mmask8 Data() const { return mask; }
     static constexpr int Size() { return 8; }    
@@ -374,6 +378,7 @@ namespace ngstd
     INLINE auto & operator[] (int i) { return ((int64_t*)(&data))[i]; }
     INLINE __m128i Data() const { return data; }
     INLINE __m128i & Data() { return data; }
+    static SIMD FirstInt() { return { 0, 1 }; }    
   };
 
 
@@ -576,6 +581,7 @@ namespace ngstd
 
     SIMD<int64_t,2> Lo() const { return _mm256_extractf128_si256(data, 0); }
     SIMD<int64_t,2> Hi() const { return _mm256_extractf128_si256(data, 1); }
+    static SIMD FirstInt() { return { 0, 1, 2, 3 }; }
   };
 
 
@@ -664,6 +670,8 @@ namespace ngstd
 
     operator tuple<int64_t&,int64_t&,int64_t&,int64_t&> ()
     { return tuple<int64_t&,int64_t&,int64_t&,int64_t&>((*this)[0], (*this)[1], (*this)[2], (*this)[3]); }
+
+    static SIMD FirstInt() { return { 0, 1, 2, 3 }; }
   };
   
   template<>
@@ -843,7 +851,7 @@ namespace ngstd
     INLINE auto & operator[] (int i) { return ((int64_t*)(&data))[i]; }
     INLINE __m512i Data() const { return data; }
     INLINE __m512i & Data() { return data; }
-
+    static SIMD FirstInt() { return { 0, 1, 2, 3, 4, 5, 6, 7 }; }
     // SIMD<double,4> Lo() const { return _mm512_extracti64x4_epi64(data, 0); }
     // SIMD<double,4> Hi() const { return _mm512_extracti64x4_epi64(data, 1); }
   };

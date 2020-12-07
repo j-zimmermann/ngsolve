@@ -45,6 +45,27 @@ namespace ngcomp
     {
       throw Exception(string("DiffOpHDivDivDual not available for mat ")+typeid(mat).name());
     }
+
+    static void GenerateMatrixSIMDIR (const FiniteElement & bfel,
+                                      const SIMD_BaseMappedIntegrationRule & mir,
+                                      BareSliceMatrix<SIMD<double>> mat)
+    {
+      Cast(bfel).CalcDualShape (mir, mat);
+    }
+
+    using DiffOp<DiffOpHDivDivDual<D> >::ApplySIMDIR;    
+    static void ApplySIMDIR (const FiniteElement & bfel, const SIMD_BaseMappedIntegrationRule & mir,
+                             BareSliceVector<double> x, BareSliceMatrix<SIMD<double>> y)
+    {
+      Cast(bfel).EvaluateDual (mir, x, y);
+    }
+
+    using DiffOp<DiffOpHDivDivDual<D> >::AddTransSIMDIR;        
+    static void AddTransSIMDIR (const FiniteElement & bfel, const SIMD_BaseMappedIntegrationRule & mir,
+                                BareSliceMatrix<SIMD<double>> y, BareSliceVector<double> x)
+    {
+      Cast(bfel).AddDualTrans (mir, y, x);
+    }
    
   };
   
@@ -649,7 +670,7 @@ namespace ngcomp
     plus = flags.GetDefineFlag ("plus");
     quadfullpol = flags.GetDefineFlag ("quadfullpol");
     algebraic_mapping = !flags.GetDefineFlagX ("algebraicmapping").IsFalse();
-    cout << "algebraicmapping = " << algebraic_mapping << endl;
+    // cout << "algebraicmapping = " << algebraic_mapping << endl;
     discontinuous = flags.GetDefineFlag("discontinuous");
     uniform_order_facet = int(flags.GetNumFlag("orderfacet",order));
     uniform_order_inner = int(flags.GetNumFlag("orderinner",order));
@@ -672,6 +693,29 @@ namespace ngcomp
       integrator[VOL] = make_shared<HDivDivMassIntegrator<3>> (one);
       flux_evaluator[VOL] = make_shared<T_DifferentialOperator<DiffOpDivHDivDiv<3>>>();
     }
+
+
+    switch(ma->GetDimension())
+      {
+      case 2:
+        additional_evaluators.Set ("vec",make_shared<T_DifferentialOperator<DiffOpVecIdHDivDiv<2>>> ());
+        // additional.Set ("ddmapped",make_shared<T_DifferentialOperator<DiffOpIdDDMappedHDivDiv<2>>> ());
+        additional_evaluators.Set ("id_old",make_shared<T_DifferentialOperator<DiffOpIdHDivDiv_old<2>>> ());
+        additional_evaluators.Set ("vec_old",make_shared<T_DifferentialOperator<DiffOpVecIdHDivDiv_old<2>>> ());
+        additional_evaluators.Set ("div_old",make_shared<T_DifferentialOperator<DiffOpDivHDivDiv_old<2>>> ());
+        additional_evaluators.Set ("dual", make_shared<T_DifferentialOperator<DiffOpHDivDivDual<2>>> ());
+        break;
+      case 3:
+        additional_evaluators.Set ("vec",make_shared<T_DifferentialOperator<DiffOpVecIdHDivDiv<3>>> ());
+        additional_evaluators.Set ("id_old",make_shared<T_DifferentialOperator<DiffOpIdHDivDiv_old<3>>> ());
+        additional_evaluators.Set ("vec_old",make_shared<T_DifferentialOperator<DiffOpVecIdHDivDiv_old<3>>> ());
+        additional_evaluators.Set ("div_old",make_shared<T_DifferentialOperator<DiffOpDivHDivDiv_old<3>>> ());
+        additional_evaluators.Set ("normalcomponent",make_shared<T_DifferentialOperator<DiffOpNormalComponentHDivDiv<3>>> ());
+        break;
+      default:
+        ;
+    }
+
   }
 
   DocInfo HDivDivFESpace :: GetDocu ()
@@ -715,117 +759,117 @@ namespace ngcomp
         fine_facet = false;
         for(auto el : ma->Elements(VOL))
           fine_facet[el.Facets()] = true;
-
-        ndof = 0;
-        for(auto i : Range(ma->GetNFacets()))
+      }
+    
+    ndof = 0;
+    for(auto i : Range(ma->GetNFacets()))
+      {
+        first_facet_dof[i] = ndof;
+        if(!fine_facet[i]) continue;
+        
+        INT<2> of = order_facet[i];
+        switch(ma->GetFacetType(i))
           {
-            first_facet_dof[i] = ndof;
-            if(!fine_facet[i]) continue;
-
-            INT<2> of = order_facet[i];
-            switch(ma->GetFacetType(i))
-              {
-              case ET_SEGM:
-                ndof += of[0] + 1; break;
-              case ET_TRIG:
-                ndof += (of[0] + 1+incrorder_zz1_bd)*(of[0] + 2+incrorder_zz1_bd) / 2; break;
-              case ET_QUAD:
-                ndof += (of[0] + 1+incrorder_xx1_bd)*(of[1] + 1+incrorder_xx2_bd); break;
-              default:
-                throw Exception("illegal facet type");
-              }
+          case ET_SEGM:
+            ndof += of[0] + 1; break;
+          case ET_TRIG:
+            ndof += (of[0] + 1+incrorder_zz1_bd)*(of[0] + 2+incrorder_zz1_bd) / 2; break;
+          case ET_QUAD:
+            ndof += (of[0] + 1+incrorder_xx1_bd)*(of[1] + 1+incrorder_xx2_bd); break;
+          default:
+            throw Exception("illegal facet type");
           }
-        first_facet_dof.Last() = ndof;
-        if(discontinuous) ndof = 0;
-
-        for(auto i : Range(ma->GetNE()))
+      }
+    first_facet_dof.Last() = ndof;
+    if(discontinuous) ndof = 0;
+    
+    for(auto i : Range(ma->GetNE()))
+      {
+        ElementId ei(VOL, i);
+        first_element_dof[i] = ndof;
+        INT<3> oi = order_inner[i];
+        switch(ma->GetElType(ei))
           {
-            ElementId ei(VOL, i);
-            first_element_dof[i] = ndof;
-            INT<3> oi = order_inner[i];
-            switch(ma->GetElType(ei))
+          case ET_TRIG:
+            ndof += 3*(oi[0]+1)*(oi[0]+2)/2 - 3*(oi[0]+1);
+            if(plus) ndof += 2*oi[0];
+            if(discontinuous)
               {
-              case ET_TRIG:
-                ndof += 3*(oi[0]+1)*(oi[0]+2)/2 - 3*(oi[0]+1);
-                if(plus) ndof += 2*oi[0];
-                if(discontinuous)
-                  {
-                    /*
-                      auto fnums = ma->GetElFacets(ei);
-                      for(int ii=0; ii<fnums.Size(); ii++)
-                      {
-                      ndof += first_facet_dof[fnums[ii]+1] - first_facet_dof[fnums[ii]];
-                      }
-                    */
-                    for (auto f : ma->GetElFacets(ei))
-                      ndof += first_facet_dof[f+1] - first_facet_dof[f];            
-                  }
-                break;
-              case ET_QUAD:
-                if (quadfullpol)
-                  {
-                    ndof += 1+2*(oi[0]+1)*(oi[0]+2) + sqr(oi[0]+1);
-                    if (plus) ndof += 4*oi[0]+4;
-                  }
-                else
-                  // original:
-                  ndof += (oi[0]+1+HDivDivFE<ET_QUAD>::incsg)*(oi [0]+1+HDivDivFE<ET_QUAD>::incsg)
-                    + (oi[0]+2)*(oi[0])*2
-                    + 2*(oi[0]+1+HDivDivFE<ET_QUAD>::incsugv) +1;
-                
-                //ndof += 2*(oi[0]+2)*(oi[0]+1) +1;
                 /*
-                  ndof += (oi[0]+1+HDivDivFE<ET_QUAD>::incsg)*(oi [0]+1+HDivDivFE<ET_QUAD>::incsg)
-                  + (oi[0]+1)*(oi[0])*2
-                  + 2*(oi[0]+1+HDivDivFE<ET_QUAD>::incsugv) +2;
-                  if (plus) ndof += 2*oi[0];
+                  auto fnums = ma->GetElFacets(ei);
+                  for(int ii=0; ii<fnums.Size(); ii++)
+                  {
+                  ndof += first_facet_dof[fnums[ii]+1] - first_facet_dof[fnums[ii]];
+                  }
                 */
-                if(discontinuous)
-                  {
-                    for (auto f : ma->GetElFacets(ei))
-                      ndof += first_facet_dof[f+1] - first_facet_dof[f];            
-                  }
-                break;
-              case ET_PRISM:
-                ndof += 3*(oi[0]+1+incrorder_xx1)*(oi[0]+incrorder_xx1)*(oi[2]+1+incrorder_xx2)/2 + 
-                  (oi[0]+1+incrorder_zz1)*(oi[0]+2+incrorder_zz1)*(oi[2]-1+incrorder_zz2)/2 + 
-                  (oi[0]+1)*(oi[0]+2)*(oi[2]+1)/2*2;
-                if(discontinuous)
-                  {
-                    for (auto f : ma->GetElFacets(ei))
-                      ndof += first_facet_dof[f+1] - first_facet_dof[f];            
-                  }
-                break;
-              case ET_HEX:
-                ndof += 3*(oi[0]+2)*(oi[0])*(oi[0]+2) + 3*(oi[0]+1)*(oi[0]+2)*(oi[0]+1);
-                if(discontinuous)
-                  {
-                    for (auto f : ma->GetElFacets(ei))
-                      ndof += first_facet_dof[f+1] - first_facet_dof[f];            
-                  }
-                break;
-              case ET_TET:
-                ndof += (oi[0]+1)*(oi[0]+2)*(oi[0]+1);
-                if (plus) ndof += 2*(oi[0]+1)*(oi[0]+2);
-                if(discontinuous)
-                  {
-                    for (auto f : ma->GetElFacets(ei))
-                      ndof += first_facet_dof[f+1] - first_facet_dof[f];            
-                  }
-                break;
-              default:
-                throw Exception(string("illegal element type") + ToString(ma->GetElType(ei)));
+                for (auto f : ma->GetElFacets(ei))
+                  ndof += first_facet_dof[f+1] - first_facet_dof[f];            
               }
+            break;
+          case ET_QUAD:
+            if (quadfullpol)
+              {
+                ndof += 1+2*(oi[0]+1)*(oi[0]+2) + sqr(oi[0]+1);
+                if (plus) ndof += 4*oi[0]+4;
+              }
+            else
+              // original:
+              ndof += (oi[0]+1+HDivDivFE<ET_QUAD>::incsg)*(oi [0]+1+HDivDivFE<ET_QUAD>::incsg)
+                + (oi[0]+2)*(oi[0])*2
+                + 2*(oi[0]+1+HDivDivFE<ET_QUAD>::incsugv) +1;
+            
+            //ndof += 2*(oi[0]+2)*(oi[0]+1) +1;
+            /*
+              ndof += (oi[0]+1+HDivDivFE<ET_QUAD>::incsg)*(oi [0]+1+HDivDivFE<ET_QUAD>::incsg)
+              + (oi[0]+1)*(oi[0])*2
+              + 2*(oi[0]+1+HDivDivFE<ET_QUAD>::incsugv) +2;
+              if (plus) ndof += 2*oi[0];
+            */
+            if(discontinuous)
+              {
+                for (auto f : ma->GetElFacets(ei))
+                  ndof += first_facet_dof[f+1] - first_facet_dof[f];            
+              }
+            break;
+          case ET_PRISM:
+            ndof += 3*(oi[0]+1+incrorder_xx1)*(oi[0]+incrorder_xx1)*(oi[2]+1+incrorder_xx2)/2 + 
+              (oi[0]+1+incrorder_zz1)*(oi[0]+2+incrorder_zz1)*(oi[2]-1+incrorder_zz2)/2 + 
+              (oi[0]+1)*(oi[0]+2)*(oi[2]+1)/2*2;
+            if(discontinuous)
+              {
+                for (auto f : ma->GetElFacets(ei))
+                  ndof += first_facet_dof[f+1] - first_facet_dof[f];            
+              }
+            break;
+          case ET_HEX:
+            ndof += 3*(oi[0]+2)*(oi[0])*(oi[0]+2) + 3*(oi[0]+1)*(oi[0]+2)*(oi[0]+1);
+            if(discontinuous)
+              {
+                for (auto f : ma->GetElFacets(ei))
+                  ndof += first_facet_dof[f+1] - first_facet_dof[f];            
+              }
+            break;
+          case ET_TET:
+            ndof += (oi[0]+1)*(oi[0]+2)*(oi[0]+1);
+            if (plus) ndof += 2*(oi[0]+1)*(oi[0]+2);
+            if(discontinuous)
+              {
+                for (auto f : ma->GetElFacets(ei))
+                  ndof += first_facet_dof[f+1] - first_facet_dof[f];            
+              }
+            break;
+          default:
+            throw Exception(string("illegal element type") + ToString(ma->GetElType(ei)));
           }
-        first_element_dof.Last() = ndof;
-        if(discontinuous)
-          first_facet_dof = 0;
-
-        if (print)
-          {
-            *testout << "Hdivdiv firstfacetdof = " << first_facet_dof << endl;
-            *testout << "Hdivdiv firsteldof = " << first_element_dof << endl;
-          }
+      }
+    first_element_dof.Last() = ndof;
+    if(discontinuous)
+      first_facet_dof = 0;
+    
+    if (print)
+      {
+        *testout << "Hdivdiv firstfacetdof = " << first_facet_dof << endl;
+        *testout << "Hdivdiv firsteldof = " << first_element_dof << endl;
       }
 
     UpdateCouplingDofArray();
@@ -1085,36 +1129,7 @@ namespace ngcomp
                          first_element_dof[ei.Nr()+1]);
 
 
-  }
-
-
-  SymbolTable<shared_ptr<DifferentialOperator>>
-    HDivDivFESpace :: GetAdditionalEvaluators () const
-  {
-    SymbolTable<shared_ptr<DifferentialOperator>> additional;
-    switch(ma->GetDimension())
-    {
-    case 2:
-      additional.Set ("vec",make_shared<T_DifferentialOperator<DiffOpVecIdHDivDiv<2>>> ());
-      // additional.Set ("ddmapped",make_shared<T_DifferentialOperator<DiffOpIdDDMappedHDivDiv<2>>> ());
-      additional.Set ("id_old",make_shared<T_DifferentialOperator<DiffOpIdHDivDiv_old<2>>> ());
-      additional.Set ("vec_old",make_shared<T_DifferentialOperator<DiffOpVecIdHDivDiv_old<2>>> ());
-      additional.Set ("div_old",make_shared<T_DifferentialOperator<DiffOpDivHDivDiv_old<2>>> ());
-      additional.Set ("dual", make_shared<T_DifferentialOperator<DiffOpHDivDivDual<2>>> ());
-      break;
-    case 3:
-      additional.Set ("vec",make_shared<T_DifferentialOperator<DiffOpVecIdHDivDiv<3>>> ());
-      additional.Set ("id_old",make_shared<T_DifferentialOperator<DiffOpIdHDivDiv_old<3>>> ());
-      additional.Set ("vec_old",make_shared<T_DifferentialOperator<DiffOpVecIdHDivDiv_old<3>>> ());
-      additional.Set ("div_old",make_shared<T_DifferentialOperator<DiffOpDivHDivDiv_old<3>>> ());
-      additional.Set ("normalcomponent",make_shared<T_DifferentialOperator<DiffOpNormalComponentHDivDiv<3>>> ());
-      break;
-    default:
-      ;
-    }
-    return additional;
-  }
-  
+  }  
 
 
   static RegisterFESpace<HDivDivFESpace> init ("hdivdiv");

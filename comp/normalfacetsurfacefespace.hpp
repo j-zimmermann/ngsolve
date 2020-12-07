@@ -1,22 +1,20 @@
-#ifndef NORMAL_FACET_FESPACE_HPP
-#define NORMAL_FACET_FESPACE_HPP
+#ifndef NORMAL_FACET_SURFACE_FESPACE_HPP
+#define NORMAL_FACET_SURFACE_FESPACE_HPP
 
 /*********************************************************************/
-/* File:   normalfacetfespace.hpp                                    */
-/* Author: Joachim Schoeberl                                         */
-/* Date:   2019                                                      */
+/* File:   normalfacetsurfacefespace.hpp                             */
+/* Author: Michael Neunteufel                                        */
+/* Date:   2020                                                      */
 /*********************************************************************/
 
 
 namespace ngcomp
 {
 
-  class NGS_DLL_HEADER NormalFacetFESpace : public FESpace
+  class NGS_DLL_HEADER NormalFacetSurfaceFESpace : public FESpace
   {
   protected:
-    int level;
     Array<int> first_facet_dof;
-    Array<int> first_inner_dof;  // for highest_order_dc
 
     int rel_order;
 
@@ -28,19 +26,17 @@ namespace ngcomp
     bool var_order;
     bool print;
 
-    bool highest_order_dc;
-    bool hide_highest_order_dc;
     
   public:
-    NormalFacetFESpace (shared_ptr<MeshAccess> ama, const Flags & flags, 
+    NormalFacetSurfaceFESpace (shared_ptr<MeshAccess> ama, const Flags & flags, 
 			bool parseflags = false );
 
-    virtual ~NormalFacetFESpace () { ; }
+    virtual ~NormalFacetSurfaceFESpace () { ; }
     static DocInfo GetDocu ();
 
     virtual string GetClassName () const override
     {
-      return "NormalFacetFESpace";
+      return "NormalFacetSurfaceFESpace";
     }
 
     void Update() override;
@@ -51,12 +47,9 @@ namespace ngcomp
     
     virtual size_t GetNDof() const throw() override { return ndof; }
 
-    virtual size_t GetNDofLevel ( int i ) const override { return ndlevel[i]; }
 
     virtual FiniteElement & GetFE(ElementId ei, Allocator & lh) const override;
     
-    virtual void GetFacetDofNrs (int felnr, Array<DofId> & dnums) const;
-
     virtual int GetNFacetDofs (int felnr) const;
 
     virtual void GetDofNrs (ElementId ei, Array<DofId> & dnums) const override;
@@ -66,10 +59,6 @@ namespace ngcomp
       return Range (first_facet_dof[nr], first_facet_dof[nr+1]);
     }
     
-
-    virtual shared_ptr<Table<int>> CreateSmoothingBlocks (const Flags & precflags) const override;
-    ///
-    virtual shared_ptr<Array<int>> CreateDirectSolverClusters (const Flags & precflags) const override;
   
     // some utility functions for convenience
     ///
@@ -78,8 +67,6 @@ namespace ngcomp
     virtual INT<2> GetFacetOrder(int fnr) const;
 
     virtual int GetFirstFacetDof(int fanr) const;
-
-    virtual bool UsesHighestOrderDiscontinuous() const {return highest_order_dc;};
 
     virtual void GetVertexDofNrs (int elnum, Array<DofId> & dnums) const override;
     virtual void GetEdgeDofNrs (int elnum, Array<DofId> & dnums) const override;
