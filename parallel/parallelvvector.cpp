@@ -489,11 +489,7 @@ namespace ngla
       sub_pardofs = paralleldofs->Range(range);
     
     AutoVector locvec = S_BaseVectorPtr<SCAL>::Range (range);
-    // this->EntrySize() already accounts for the type of SCAL
-    int correctes = this->EntrySize() * sizeof(double) / sizeof(SCAL);
-    auto vec = make_unique<S_ParallelBaseVectorPtr<SCAL>> (range.Size(),
-		                                           // this->EntrySize(), // this line causes a memory corruption
-							   correctes,
+    auto vec = make_unique<S_ParallelBaseVectorPtr<SCAL>> (range.Size(), this->EntrySize(),
                                                            locvec.Memory(), 
                                                            sub_pardofs,
                                                            this->GetParallelStatus());
@@ -514,11 +510,7 @@ namespace ngla
   AutoVector S_ParallelBaseVectorPtr<SCAL> :: Range (DofRange range) const
   {
     AutoVector locvec = S_BaseVectorPtr<SCAL>::Range (range);
-    // this->EntrySize() already accounts for the type of SCAL
-    int correctes = this->EntrySize() * sizeof(double) / sizeof(SCAL);
-    auto vec = make_unique<S_ParallelBaseVectorPtr<SCAL>> (range.Size(),
-		                                           //this->EntrySize(), // this line causes a memory corruption
-							   correctes,
+    auto vec = make_unique<S_ParallelBaseVectorPtr<SCAL>> (range.Size(), this->EntrySize(),
                                                            locvec.Memory(), 
                                                            range.GetParallelDofs(),
                                                            this->GetParallelStatus());
