@@ -625,9 +625,9 @@ direction : int
       return NormalVectorCF(dim);
     }
 
-    shared_ptr<CF> GetTangentialVectorCF (int dim)
+    shared_ptr<CF> GetTangentialVectorCF (int dim, bool consistent)
     {
-      return TangentialVectorCF(dim);
+      return TangentialVectorCF(dim, consistent);
     }
 
     shared_ptr<CF> GetJacobianMatrixCF (int dims, int dimr)
@@ -639,6 +639,17 @@ direction : int
     {
       return WeingartenCF(dim);
     }
+
+    shared_ptr<CF> GetVertexTangentialVectorsCF (int dim)
+    {
+      return VertexTangentialVectorsCF(dim);
+    }
+
+    shared_ptr<CF> GetEdgeCurvatureCF (int dim)
+    {
+      return EdgeCurvatureCF(dim);
+    }
+
   };
 
   
@@ -669,7 +680,7 @@ direction : int
     .def("normal", &SpecialCoefficientFunctions::GetNormalVectorCF, py::arg("dim"),
          "depending on contents: normal-vector to geometry or element\n"
          "space-dimension must be provided")
-    .def("tangential", &SpecialCoefficientFunctions::GetTangentialVectorCF, py::arg("dim"),
+    .def("tangential", &SpecialCoefficientFunctions::GetTangentialVectorCF, py::arg("dim"), py::arg("consistent")=false,
          "depending on contents: tangential-vector to element\n"
          "space-dimension must be provided")
     .def("JacobianMatrix", [] (SpecialCoefficientFunctions& self, int dim)
@@ -690,6 +701,12 @@ direction : int
          "space-dimensions dimr >= dims must be provided")
     .def("Weingarten", &SpecialCoefficientFunctions::GetWeingartenCF, py::arg("dim"),
          "Weingarten tensor \n"
+         "space-dimension must be provided")
+    .def("VertexTangentialVectors", &SpecialCoefficientFunctions::GetVertexTangentialVectorsCF, py::arg("dim"),
+         "VertexTangentialVectors \n"
+         "space-dimension must be provided")
+    .def("EdgeCurvature", &SpecialCoefficientFunctions::GetEdgeCurvatureCF, py::arg("dim"),
+         "EdgeCurvature \n"
          "space-dimension must be provided")
     ;
   static SpecialCoefficientFunctions specialcf;
@@ -831,6 +848,25 @@ val : can be one of the following:
                                          },
          py::arg("comp"),         
          "returns component comp of vectorial CF")
+    .def("__getitem__",  [](shared_ptr<CF> self, py::slice inds)
+         {
+           FlatArray<int> dims = self->Dimensions();
+           if (dims.Size() != 1)
+             throw py::index_error();
+           
+           size_t start, step, n;
+           InitSlice( inds, dims[0], start, step, n );
+           int first = start;
+           Array<int> num = { int(n) };
+           Array<int> dist = { int(step) };
+           /*
+             if (c1 < 0 || c2 < 0 || c1 >= dims[0] || c2 >= dims[1])
+             throw py::index_error();
+           */
+           return MakeSubTensorCoefficientFunction (self, first, move(num), move(dist));
+         }, py::arg("components"))
+
+    /*
     .def("__getitem__",  [](shared_ptr<CF> self, py::tuple comps)
                                          {
                                            if (py::len(comps) != 2)
@@ -847,6 +883,116 @@ val : can be one of the following:
                                            int comp = c1 * dims[1] + c2;
                                            return MakeComponentCoefficientFunction (self, comp);
                                          }, py::arg("components"))
+    */
+    .def("__getitem__",  [](shared_ptr<CF> self, tuple<int,int> comps)
+         {
+           FlatArray<int> dims = self->Dimensions();
+           if (dims.Size() != 2)
+             throw py::index_error();
+           
+           auto [c1,c2] = comps;
+           if (c1 < 0 || c2 < 0 || c1 >= dims[0] || c2 >= dims[1])
+             throw py::index_error();
+           
+           int comp = c1 * dims[1] + c2;
+           return MakeComponentCoefficientFunction (self, comp);
+         }, py::arg("components"))
+    
+    .def("__getitem__",  [](shared_ptr<CF> self, tuple<py::slice,int> comps)
+         {
+           FlatArray<int> dims = self->Dimensions();
+           if (dims.Size() != 2)
+             throw py::index_error();
+           
+           auto [inds,c2] = comps;
+           size_t start, step, n;
+           InitSlice( inds, dims[0], start, step, n );
+           int first = start*dims[1]+c2;
+           Array<int> num = { int(n) };
+           Array<int> dist = { int(step)*dims[1] };
+           /*
+             if (c1 < 0 || c2 < 0 || c1 >= dims[0] || c2 >= dims[1])
+             throw py::index_error();
+           */
+           return MakeSubTensorCoefficientFunction (self, first, move(num), move(dist));
+         }, py::arg("components"))
+    
+    .def("__getitem__",  [](shared_ptr<CF> self, tuple<int,py::slice> comps)
+         {
+           FlatArray<int> dims = self->Dimensions();
+           if (dims.Size() != 2)
+             throw py::index_error();
+           
+           auto [c1,inds] = comps;
+           size_t start, step, n;
+           InitSlice( inds, dims[1], start, step, n );
+           // cout << "get row " << c1 << ", start=" << start << ", step = " << step << ", n = " << n << endl;
+           int first = start+c1*dims[1];
+           Array<int> num = { int(n) };
+           Array<int> dist = { int(step) };
+           /*
+             if (c1 < 0 || c2 < 0 || c1 >= dims[0] || c2 >= dims[1])
+             throw py::index_error();
+           */
+           return MakeSubTensorCoefficientFunction (self, first, move(num), move(dist));
+         }, py::arg("components"))
+    
+    .def("__getitem__",  [](shared_ptr<CF> self, tuple<py::slice,py::slice> comps)
+         {
+           FlatArray<int> dims = self->Dimensions();
+           if (dims.Size() != 2)
+             throw py::index_error();
+           
+           auto [inds1,inds2] = comps;
+           size_t start1, step1, n1;
+           InitSlice( inds1, dims[0], start1, step1, n1 );
+           size_t start2, step2, n2;
+           InitSlice( inds2, dims[1], start2, step2, n2 );
+
+           int first = start1*dims[1]+start2;
+           Array<int> num = { int(n1), int(n2) };
+           Array<int> dist = { int(step1)*dims[1], int(step2) };
+           /*
+             if (c1 < 0 || c2 < 0 || c1 >= dims[0] || c2 >= dims[1])
+             throw py::index_error();
+           */
+           return MakeSubTensorCoefficientFunction (self, first, move(num), move(dist));
+         }, py::arg("components"))
+    
+
+    .def("__getitem__",  [](shared_ptr<CF> self, tuple<int,int,int> comps)
+         {
+           FlatArray<int> dims = self->Dimensions();
+           if (dims.Size() != 3)
+             throw py::index_error();
+           
+           auto [c1,c2,c3] = comps;
+           if (c1 < 0 || c2 < 0 || c3 < 0 ||
+               c1 >= dims[0] || c2 >= dims[1] || c3 >= dims[2])
+             throw py::index_error();
+           
+           int comp = (c1 * dims[1] + c2) * dims[2] + c3;
+           return MakeComponentCoefficientFunction (self, comp);
+         }, py::arg("components"))
+
+    
+    .def("__getitem__",  [](shared_ptr<CF> self, tuple<int,int,int,int> comps)
+         {
+           FlatArray<int> dims = self->Dimensions();
+           if (dims.Size() != 4)
+             throw py::index_error();
+           
+           auto [c1,c2,c3,c4] = comps;
+           if (c1 < 0 || c2 < 0 || c3 < 0 || c4 < 0 ||
+               c1 >= dims[0] || c2 >= dims[1] || c3 >= dims[2] || c4 >= dims[3])
+             throw py::index_error();
+           
+           int comp = ((c1 * dims[1] + c2) * dims[2] + c3) * dims[3] + c4;
+           return MakeComponentCoefficientFunction (self, comp);
+         }, py::arg("components"))
+
+    
+    
 
     // coefficient expressions
     .def ("__add__", [] (shared_ptr<CF> c1, shared_ptr<CF> c2) { return c1+c2; }, py::arg("cf") )
@@ -989,9 +1135,10 @@ cf : ngsolve.CoefficientFunction
                return val * coef;
            }, py::arg("value"))
 
-    .def("__mul__", [](shared_ptr<CoefficientFunction> cf, DifferentialSymbol dx)
+    .def("__mul__", [](shared_ptr<CoefficientFunction> cf, DifferentialSymbol & dx)
          {
-           return make_shared<SumOfIntegrals>(make_shared<Integral> (cf, dx));
+           // return make_shared<SumOfIntegrals>(make_shared<Integral> (cf, dx));
+           return make_shared<SumOfIntegrals> (dx.MakeIntegral (cf));  // overloaded in ngsxfem
          })
     
     .def ("__rmul__", [] (shared_ptr<CF> coef, Complex val)
@@ -1081,6 +1228,8 @@ wait : bool
   m.def("Det", [] (shared_ptr<CF> cf) { return DeterminantCF(cf); });
   m.def("Conj", [] (shared_ptr<CF> cf) { return ConjCF(cf); }, "complex-conjugate");  
 
+  m.def("MinimizationCF", &CreateMinimizationCF);
+  
   py::implicitly_convertible<double, CoefficientFunction>();
   py::implicitly_convertible<Complex, CoefficientFunction>();
   py::implicitly_convertible<int, CoefficientFunction>();
@@ -1238,6 +1387,13 @@ value : complex
           "return parameter value")
     ;
 
+  py::class_<PlaceholderCoefficientFunction,
+             shared_ptr<PlaceholderCoefficientFunction>,
+             CoefficientFunction>
+    (m, "PlaceholderCF")
+    .def(py::init<shared_ptr<CF>>())
+    .def("Set", &PlaceholderCoefficientFunction::Set)
+    ;
 
   py::class_<BSpline, shared_ptr<BSpline> > (m, "BSpline",R"raw(
 BSpline of arbitrary order
@@ -2051,8 +2207,92 @@ complex : bool
   input complex
 
 )raw_string"))
-    ;
+    .def("CalcLinearizedElementMatrix",
+         [] (shared_ptr<BFI> self,
+             const FiniteElement & fe, FlatVector<double> vec, 
+             const ElementTransformation &trafo,
+             size_t heapsize)
+                         {
+                           while (true)
+                             {
+                               LocalHeap lh(heapsize);
+                               try
+                                 {
+                                  const MixedFiniteElement * mixedfe = dynamic_cast<const MixedFiniteElement*> (&fe);
+                                  const FiniteElement & fe_trial = mixedfe ? mixedfe->FETrial() : fe;
+                                  const FiniteElement & fe_test = mixedfe ? mixedfe->FETest() : fe;
+                                  
+                                  Matrix<> mat(fe_test.GetNDof() * self->GetDimension(),
+                                              fe_trial.GetNDof() * self->GetDimension());
+                                  self->CalcLinearizedElementMatrix (fe, trafo, vec, mat, lh);
+                                  return py::cast(mat);
+                                 }
+                               catch (LocalHeapOverflow ex)
+                                 {
+                                   heapsize *= 10;
+                                 }
+                             }
+                         },
+         py::arg("fel"),py::arg("vec"),py::arg("trafo"),py::arg("heapsize")=10000, docu_string(R"raw_string( 
+Calculate (linearized) element matrix of a specific element.
 
+Parameters:
+
+fel : ngsolve.fem.FiniteElement
+  input finite element
+
+vec : Vector
+  linearization argument
+
+trafo : ngsolve.fem.ElementTransformation
+  input element transformation
+
+heapsize : int
+  input heapsize
+)raw_string"))
+    .def("ApplyElementMatrix",
+         [] (shared_ptr<BFI> self,
+             const FiniteElement & fe, FlatVector<double> vec, 
+             const ElementTransformation &trafo,
+             size_t heapsize)
+                         {
+                           while (true)
+                             {
+                               LocalHeap lh(heapsize);
+                               try
+                                 {
+                                  const MixedFiniteElement * mixedfe = dynamic_cast<const MixedFiniteElement*> (&fe);
+                                  // const FiniteElement & fe_trial = mixedfe ? mixedfe->FETrial() : fe;
+                                  const FiniteElement & fe_test = mixedfe ? mixedfe->FETest() : fe;
+                                  Vector<> vecy(fe_test.GetNDof() * self->GetDimension());
+                                  self->ApplyElementMatrix (fe, trafo, vec, vecy, 0, lh);
+                                  return py::cast(vecy);
+                                 }
+                               catch (LocalHeapOverflow ex)
+                                 {
+                                   heapsize *= 10;
+                                 }
+                             }
+                         },
+         py::arg("fel"),py::arg("vec"),py::arg("trafo"),py::arg("heapsize")=10000, docu_string(R"raw_string( 
+Apply element matrix of a specific element.
+
+Parameters:
+
+fel : ngsolve.fem.FiniteElement
+  input finite element
+
+vec : Vector
+  evaluation argument
+
+trafo : ngsolve.fem.ElementTransformation
+  input element transformation
+
+heapsize : int
+  input heapsize
+
+)raw_string"))
+    ;
 
   m.def("CompoundBFI", 
           []( shared_ptr<BFI> bfi, int comp )

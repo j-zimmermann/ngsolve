@@ -431,6 +431,65 @@ namespace ngfem
       AddGradTrans (ir, values.Rows(i*dim, (i+1)*dim), coefs.Col(i));
   }
 
+
+
+  
+  template<int D>
+  void ScalarFiniteElement<D> :: Interpolate (const ElementTransformation & trafo, 
+                                              const CoefficientFunction & func, SliceMatrix<> coefs,
+                                              LocalHeap & lh) const
+  {
+    HeapReset hr(lh);
+    
+    FlatMatrix<> elflux(GetNDof(), coefs.Width(), lh);
+    elflux = 0.0;
+    
+    for (int el_vb = D; el_vb >= 0; el_vb--)
+      {
+        Facet2ElementTrafo f2el (ElementType(), VorB(el_vb));
+        for (int locfnr : Range(f2el.GetNFacets()))
+          {
+            SIMD_IntegrationRule irfacet(f2el.FacetType(locfnr), 2 * Order());
+            auto & irvol = f2el(locfnr, irfacet, lh);
+            auto & mir = trafo(irvol, lh);
+
+            FlatMatrix<SIMD<double>> mfluxi(coefs.Width(), mir.IR().Size(), lh);
+            func.Evaluate (mir, mfluxi);
+
+            for (size_t j : Range(mir))
+              mfluxi.Col(j) *= mir[j].IP().Weight();
+
+            for (int i = 0; i < coefs.Width(); i++)
+              AddDualTrans (mir.IR(), mfluxi.Row(i), elflux.Col(i));
+          }
+      }
+
+    for (int i = 0; i < coefs.Width(); i++)
+      if (!SolveDuality (elflux.Col(i), coefs.Col(i), lh))
+        throw Exception("scalar interpolate need solveduality");
+
+    /*
+      ... otherwise 
+                       {
+                       // Calc Element Matrix 
+                         FlatMatrix<SCAL> elmat(fel.GetNDof(), lh); elmat = 0.0;
+                         bool symmetric_so_far = true;
+                         for (auto sbfi : single_bli)
+                           { sbfi->CalcElementMatrixAdd (fel, eltrans, elmat, symmetric_so_far, lh); }
+                         
+                           // Invert Element Matrix and Solve for RHS 
+                         CalcInverse(elmat); // Not Symmetric !
+                         
+                         if (dim > 1) {
+                           for (int j = 0; j < dim; j++)
+                             { elfluxi.Slice (j,dim) = elmat * elflux.Slice (j,dim); }
+                         }
+                         else
+                           { elfluxi = elmat * elflux; }
+                       }
+  */
+  }
+				  
   
 
   template <int D>
@@ -648,8 +707,6 @@ namespace ngfem
 
 
 
-				  
-
 
 
   void BaseScalarFiniteElement :: GetDiagMassMatrix (FlatVector<> mass) const
@@ -662,8 +719,8 @@ namespace ngfem
 
 
 
-  template <int D>
-  void DGFiniteElement<D>:: 
+  template <ELEMENT_TYPE ET>
+  void DGFiniteElement<ET>:: 
   GetDiagMassMatrix (FlatVector<> mass) const
   {
 #ifndef __CUDA_ARCH__
@@ -680,8 +737,8 @@ namespace ngfem
   }
 
 
-  template <int D>
-  void DGFiniteElement<D>:: 
+  template <ELEMENT_TYPE ET>  
+  void DGFiniteElement<ET>:: 
   CalcTraceMatrix (int facet, FlatMatrix<> trace) const
   {
     ELEMENT_TYPE ftype = ElementTopology::GetFacetType (this->ElementType(), facet);
@@ -732,8 +789,8 @@ namespace ngfem
     delete facetfe2;
   }
 
-  template <int D>
-  void DGFiniteElement<D>:: 
+  template <ELEMENT_TYPE ET>  
+  void DGFiniteElement<ET>:: 
   CalcGradientMatrix (FlatMatrix<> gmat) const
   {
     IntegrationRule ir (this->ElementType(), 2*order);
@@ -762,8 +819,8 @@ namespace ngfem
   }
 
 
-  template <int D>
-  void DGFiniteElement<D>:: 
+  template <ELEMENT_TYPE ET>    
+  void DGFiniteElement<ET>:: 
   GetGradient (FlatVector<> coefs, FlatMatrixFixWidth<D> grad) const
   {
     Matrix<> gmat(D*grad.Height(), coefs.Size());
@@ -771,9 +828,9 @@ namespace ngfem
     FlatVector<> vgrad(gmat.Height(), &grad(0,0));
     vgrad = gmat * coefs;
   }
-  
-  template <int D>
-  void DGFiniteElement<D>:: 
+
+  template <ELEMENT_TYPE ET>    
+  void DGFiniteElement<ET>:: 
   GetGradientTrans (FlatMatrixFixWidth<D> grad, FlatVector<> coefs) const 
   {
     Matrix<> gmat(D*grad.Height(), coefs.Size());
@@ -781,9 +838,10 @@ namespace ngfem
     FlatVector<> vgrad(gmat.Height(), &grad(0,0));
     coefs = Trans (gmat) * vgrad;
   }
+
   
-  template <int D>
-  void DGFiniteElement<D>:: 
+  template <ELEMENT_TYPE ET>  
+  void DGFiniteElement<ET>:: 
   GetTrace (int facet, FlatVector<> coefs, FlatVector<> fcoefs) const
   {
     Matrix<> trace(fcoefs.Size(), coefs.Size());
@@ -791,8 +849,8 @@ namespace ngfem
     fcoefs = trace * coefs;
   }
   
-  template <int D>
-  void DGFiniteElement<D>:: 
+  template <ELEMENT_TYPE ET>  
+  void DGFiniteElement<ET>:: 
   GetTraceTrans (int facet, FlatVector<> fcoefs, FlatVector<> coefs) const
   {
     Matrix<> trace(fcoefs.Size(), coefs.Size());
@@ -807,12 +865,20 @@ namespace ngfem
   template class ScalarFiniteElement<2>;
   template class ScalarFiniteElement<3>;
 
-
+  template class DGFiniteElement<ET_POINT>;
+  template class DGFiniteElement<ET_SEGM>;
+  template class DGFiniteElement<ET_TRIG>;
+  template class DGFiniteElement<ET_QUAD>;
+  template class DGFiniteElement<ET_TET>;
+  template class DGFiniteElement<ET_PRISM>;
+  template class DGFiniteElement<ET_PYRAMID>;
+  template class DGFiniteElement<ET_HEX>;
+  /*
   template class DGFiniteElement<0>;
   template class DGFiniteElement<1>;
   template class DGFiniteElement<2>;
   template class DGFiniteElement<3>;
-  
+  */
 
 
   template class  T_ScalarFiniteElement<ScalarDummyFE<ET_POINT>,ET_POINT>;

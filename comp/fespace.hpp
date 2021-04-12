@@ -454,7 +454,7 @@ ANY                  1 1 1 1 | 15
     virtual void GetDofNrs (ElementId ei, Array<DofId> & dnums) const = 0;
     
     virtual void GetDofNrs (NodeId ni, Array<DofId> & dnums) const;
-    BitArray GetDofs (Region reg) const;
+    BitArray GetDofs (const Region & reg) const;
     Table<int> CreateDofTable (VorB vorb) const;
 
     /// get coupling types of dofs
@@ -983,6 +983,8 @@ ANY                  1 1 1 1 | 15
     ///
     // Array<int> ndlevel;
     bool hb_defined;
+    Array<bool> used_vertex;
+    Array<bool> used_edge;
 
   public:
 
@@ -999,6 +1001,7 @@ ANY                  1 1 1 1 | 15
 
     ///
     void Update () override;
+    void UpdateCouplingDofArray() override;
     
     virtual void DoArchive (Archive & archive) override;
 
@@ -1154,6 +1157,7 @@ ANY                  1 1 1 1 | 15
     /// dofs on each multigrid level
     /// Array<int> ndlevel;
     bool all_the_same;
+    bool do_subspace_update = true;
   public:
     /// generates a compound space.
     /// components will be added later
@@ -1248,7 +1252,10 @@ ANY                  1 1 1 1 | 15
                        SliceVector<Complex> vec, TRANSFORM_TYPE tt) const override;
 
     /// number of component spaces
-    inline int GetNSpaces () const { return spaces.Size(); } 
+    inline int GetNSpaces () const { return spaces.Size(); }
+
+    void SetDoSubspaceUpdate(bool _do_subspace_update)
+    { do_subspace_update = _do_subspace_update; }
   };
 
 
@@ -1259,6 +1266,24 @@ ANY                  1 1 1 1 | 15
     CompoundFESpaceAllSame (shared_ptr<FESpace> space, int dim, const Flags & flags,
                             bool checkflags = false);
     virtual string GetClassName () const override;
+
+    virtual FlatArray<VorB> GetDualShapeNodes (VorB vb) const override
+    {
+      return spaces[0]->GetDualShapeNodes(vb);
+    }
+
+  };
+
+  class NGS_DLL_HEADER MatrixFESpace : public CompoundFESpace
+  {
+    bool symmetric;
+    bool deviatoric;
+    int vdim;
+  public:
+    MatrixFESpace (shared_ptr<FESpace> space, int avdim, const Flags & flags,
+                   bool checkflags = false);
+    virtual string GetClassName () const override;
+    FiniteElement & GetFE (ElementId ei, Allocator & lh) const override;    
   };
 
 

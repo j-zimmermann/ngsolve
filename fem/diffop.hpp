@@ -86,7 +86,10 @@ namespace ngfem
 			 LocalHeap & lh)
     {
       for (size_t i = 0; i < mir.Size(); i++)
-        DOP::Apply (fel, mir[i], x, y.Row(i), lh);
+        {
+          HeapReset hr(lh);
+          DOP::Apply (fel, mir[i], x, y.Row(i), lh);
+        }
     }
 
     /// Computes B-matrix times element vector in many points
@@ -139,7 +142,10 @@ namespace ngfem
     {
       y.Range(0,DOP::DIM*fel.GetNDof()) = 0.0;
       for (size_t i = 0; i < mir.Size(); i++)
-        ApplyTransAdd (fel, mir[i], x.Row(i), y, lh);
+        {
+          HeapReset hr(lh);        
+          ApplyTransAdd (fel, mir[i], x.Row(i), y, lh);
+        }
     }
 
     /// Computes Transpose (B-matrix) times point value    
@@ -174,12 +180,16 @@ namespace ngfem
   */
   class DifferentialOperator
   {
-  protected:
+  private:
     int dim;
     int blockdim;
+    Array<int> dimensions;
+    
+    int vsdim;    // symmetric 3x3 matrix has dim=9, but vector-space dim=6
+    optional<Matrix<>> vsembedding;
+  protected:
     VorB vb;
     int difforder;
-    Array<int> dimensions;
   public:
     /*
     [[deprecated("Use DifferentialOperator(int,int,VorB,int) instead")]]
@@ -201,14 +211,22 @@ namespace ngfem
         dimensions = Array<int> ( { blockdim } );
       else
         dimensions = Array<int> ( { dim/blockdim, blockdim });
+
+      vsdim = dim;
     }
     /// destructor
     NGS_DLL_HEADER virtual ~DifferentialOperator ();
+    void SetDimensions (const Array<int> & adims) { dimensions = adims; }
+    void SetVectorSpaceEmbedding (Matrix <> emb)
+    { vsembedding = emb; vsdim = emb.Width(); }
+    optional<FlatMatrix<>> GetVSEmbedding() const { return vsembedding; }
+    
     ///
     virtual string Name() const { return typeid(*this).name(); }
     /// dimension of range
     int Dim() const { return dim; }
-    const Array<int> & Dimensions() const { return dimensions; } 
+    int VSDim() const { return vsdim; }
+    const Array<int> & Dimensions() const { return dimensions; }
     /// number of copies of finite element by BlockDifferentialOperator
     int BlockDim() const { return blockdim; }
     /// does it live on the boundary ?
@@ -262,6 +280,13 @@ namespace ngfem
     CalcMatrix (const FiniteElement & fel,
 		const SIMD_BaseMappedIntegrationRule & mir,
 		BareSliceMatrix<SIMD<Complex>> mat) const;
+
+    /// Bmat = vs-embedding * BmatVS    (if vs-embedding is set)
+    NGS_DLL_HEADER virtual void
+    CalcMatrixVS (const FiniteElement & fel,
+                  const BaseMappedIntegrationPoint & mip,
+                  SliceMatrix<double,ColMajor> mat,   
+                  LocalHeap & lh) const;
 
     NGS_DLL_HEADER virtual void
     CalcLinearizedMatrix (const FiniteElement & fel,
@@ -501,7 +526,8 @@ namespace ngfem
                              adiffop->VB(), adiffop->DiffOrder()),
         diffop(adiffop), dim(adim), comp(acomp)
     {
-      dimensions = Array<int> ( { adim, adiffop->Dim() });
+      // dimensions = Array<int> ( { adim, adiffop->Dim() });
+      SetDimensions ( { adim, adiffop->Dim() } );
     }
 
     NGS_DLL_HEADER virtual ~BlockDifferentialOperatorTrans ();
@@ -593,9 +619,11 @@ namespace ngfem
         diffop(adiffop), dim(adim)
     {
       if (adiffop->Dimensions().Size() == 0)
-        dimensions = Array<int> ( { adim });
+        // dimensions = Array<int> ( { adim });
+        SetDimensions ( { adim } );
       else
-        dimensions = Array<int> ( { adim, adiffop->Dim() });
+        // dimensions = Array<int> ( { adim, adiffop->Dim() });
+        SetDimensions ( { adim, adiffop->Dim() } );
     }
 
     NGS_DLL_HEADER virtual ~VectorDifferentialOperator ();
@@ -669,8 +697,163 @@ namespace ngfem
   };
 
 
+  class MatrixDifferentialOperator : public DifferentialOperator
+  {
+  protected:
+    shared_ptr<DifferentialOperator> diffop;
+    int vdim;
+  public:
+    MatrixDifferentialOperator (shared_ptr<DifferentialOperator> adiffop, 
+                                int avdim)
+      : DifferentialOperator(sqr(avdim)*adiffop->Dim(), adiffop->BlockDim(),
+                             adiffop->VB(), adiffop->DiffOrder()),
+        diffop(adiffop), vdim(avdim)
+    {
+      if (adiffop->Dimensions().Size() == 0)
+        // dimensions = Array<int> ( { avdim, avdim });
+        SetDimensions ( { avdim, avdim } );
+      else
+        throw Exception("no matrix-valued of vector-valued possible");
+    }
+
+    NGS_DLL_HEADER virtual ~MatrixDifferentialOperator ();
+    
+    virtual string Name() const override { return diffop->Name(); }
+    shared_ptr<DifferentialOperator> BaseDiffOp() const { return diffop; }
+    virtual bool SupportsVB (VorB checkvb) const override { return diffop->SupportsVB(checkvb); }
+    
+    virtual IntRange UsedDofs(const FiniteElement & fel) const override { return IntRange(0, fel.GetNDof()); }
+
+    shared_ptr<DifferentialOperator> GetTrace() const override
+    {
+      if (auto diffoptrace = diffop->GetTrace())      
+        return make_shared<MatrixDifferentialOperator> (diffoptrace, vdim);
+      else
+        return nullptr;
+    }
+    
+    NGS_DLL_HEADER virtual void
+    CalcMatrix (const FiniteElement & fel,
+		const BaseMappedIntegrationPoint & mip,
+		SliceMatrix<double,ColMajor> mat, 
+		LocalHeap & lh) const override;    
+  };
+
+  class SymMatrixDifferentialOperator : public DifferentialOperator
+  {
+  protected:
+    shared_ptr<DifferentialOperator> diffop;
+    int vdim;
+  public:
+    NGS_DLL_HEADER SymMatrixDifferentialOperator (shared_ptr<DifferentialOperator> adiffop, 
+                                                  int avdim);
+
+    NGS_DLL_HEADER virtual ~SymMatrixDifferentialOperator ();
+    
+    virtual string Name() const override { return diffop->Name(); }
+    shared_ptr<DifferentialOperator> BaseDiffOp() const { return diffop; }
+    virtual bool SupportsVB (VorB checkvb) const override { return diffop->SupportsVB(checkvb); }
+    
+    virtual IntRange UsedDofs(const FiniteElement & fel) const override
+    { return IntRange(0, fel.GetNDof()); }
+
+    shared_ptr<DifferentialOperator> GetTrace() const override
+    {
+      if (auto diffoptrace = diffop->GetTrace())      
+        return make_shared<SymMatrixDifferentialOperator> (diffoptrace, vdim);
+      else
+        return nullptr;
+    }
+    
+    NGS_DLL_HEADER virtual void
+    CalcMatrix (const FiniteElement & fel,
+		const BaseMappedIntegrationPoint & mip,
+		SliceMatrix<double,ColMajor> mat, 
+		LocalHeap & lh) const override;    
+
+    NGS_DLL_HEADER virtual void
+    CalcMatrixVS (const FiniteElement & fel,
+                  const BaseMappedIntegrationPoint & mip,
+                  SliceMatrix<double,ColMajor> mat, 
+                  LocalHeap & lh) const override;
+
+    NGS_DLL_HEADER virtual void 
+    CalcMatrix (const FiniteElement & bfel,
+                const SIMD_BaseMappedIntegrationRule & mir,
+                BareSliceMatrix<SIMD<double>> bmat) const override;
+
+    NGS_DLL_HEADER virtual void
+    Apply (const FiniteElement & bfel,
+	   const SIMD_BaseMappedIntegrationRule & bmir,
+	   BareSliceVector<double> x, 
+	   BareSliceMatrix<SIMD<double>> flux) const override;
+
+    NGS_DLL_HEADER virtual void
+    AddTrans (const FiniteElement & bfel,
+              const SIMD_BaseMappedIntegrationRule & bmir,
+              BareSliceMatrix<SIMD<double>> flux,
+              BareSliceVector<double> x) const override;
+  };
 
 
+
+  
+  class SymDevMatrixDifferentialOperator : public DifferentialOperator
+  {
+  protected:
+    shared_ptr<DifferentialOperator> diffop;
+    int vdim;
+  public:
+    NGS_DLL_HEADER SymDevMatrixDifferentialOperator (shared_ptr<DifferentialOperator> adiffop, 
+                                                     int avdim);
+
+    NGS_DLL_HEADER virtual ~SymDevMatrixDifferentialOperator ();
+    
+    virtual string Name() const override { return diffop->Name(); }
+    shared_ptr<DifferentialOperator> BaseDiffOp() const { return diffop; }
+    virtual bool SupportsVB (VorB checkvb) const override { return diffop->SupportsVB(checkvb); }
+    
+    virtual IntRange UsedDofs(const FiniteElement & fel) const override
+    { return IntRange(0, fel.GetNDof()); }
+
+    shared_ptr<DifferentialOperator> GetTrace() const override
+    {
+      if (auto diffoptrace = diffop->GetTrace())      
+        return make_shared<SymMatrixDifferentialOperator> (diffoptrace, vdim);
+      else
+        return nullptr;
+    }
+    
+    NGS_DLL_HEADER virtual void
+    CalcMatrix (const FiniteElement & fel,
+		const BaseMappedIntegrationPoint & mip,
+		SliceMatrix<double,ColMajor> mat, 
+		LocalHeap & lh) const override;    
+
+    NGS_DLL_HEADER virtual void
+    CalcMatrixVS (const FiniteElement & fel,
+                  const BaseMappedIntegrationPoint & mip,
+                  SliceMatrix<double,ColMajor> mat, 
+                  LocalHeap & lh) const override;
+    /*
+    NGS_DLL_HEADER virtual void 
+    CalcMatrix (const FiniteElement & bfel,
+                const SIMD_BaseMappedIntegrationRule & mir,
+                BareSliceMatrix<SIMD<double>> bmat) const override;
+
+    NGS_DLL_HEADER virtual void
+    Apply (const FiniteElement & bfel,
+	   const SIMD_BaseMappedIntegrationRule & bmir,
+	   BareSliceVector<double> x, 
+	   BareSliceMatrix<SIMD<double>> flux) const override;
+
+    NGS_DLL_HEADER virtual void
+    AddTrans (const FiniteElement & bfel,
+              const SIMD_BaseMappedIntegrationRule & bmir,
+              BareSliceMatrix<SIMD<double>> flux,
+              BareSliceVector<double> x) const override;
+    */
+  };
 
   
   
@@ -691,7 +874,9 @@ namespace ngfem
     T_DifferentialOperator()
       : DifferentialOperator(DIFFOP::DIM_DMAT, 1, VorB(int(DIM_SPACE)-int(DIM_ELEMENT)), DIFFOP::DIFFORDER)
     {
-      dimensions = DIFFOP::GetDimensions();
+      Array<int> hdims;
+      hdims = DIFFOP::GetDimensions();
+      SetDimensions ( hdims );
     }
 
     virtual string Name() const override { return DIFFOP::Name(); }

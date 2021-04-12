@@ -64,7 +64,7 @@ namespace ngfem
     bool nodalp2 = false;
 
   public:
-
+    using VertexOrientedFE<ET>::SetVertexNumbers;    
     using ET_trait<ET>::ElementType;
     // using VertexOrientedFE<ET>::SetVertexNumbers;
     // using VertexOrientedFE<ET>::SetVertexNumber;
@@ -151,7 +151,7 @@ namespace ngfem
     virtual bool DualityMassDiagonal () const override
     {
       return (ET == ET_SEGM) || (ET == ET_TRIG) || (ET == ET_QUAD)
-        || (ET == ET_HEX); 
+        || (ET == ET_HEX) || (ET == ET_TET); 
     }
   };
 

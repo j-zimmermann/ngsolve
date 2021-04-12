@@ -190,8 +190,10 @@ namespace ngfem
   template <int D>
   class cl_TangentialVectorCF : public CoefficientFunctionNoDerivative
   {
+    bool consistent;
   public:
-    cl_TangentialVectorCF () : CoefficientFunctionNoDerivative(D,false) { ; }
+    cl_TangentialVectorCF (bool aconsistent)
+      : CoefficientFunctionNoDerivative(D,false), consistent(aconsistent) { ; }
     // virtual int Dimension() const { return D; }
 
     virtual double Evaluate (const BaseMappedIntegrationPoint & ip) const override
@@ -202,8 +204,26 @@ namespace ngfem
     {
       if (ip.DimSpace() != D)
         throw Exception("illegal dim of tangential vector");
+      
       res = static_cast<const DimMappedIntegrationPoint<D>&>(ip).GetTV();
+
+      if (consistent)
+        {
+          auto & trafo = ip.GetTransformation();
+          int fnr = ip.IP().FacetNr();
+          ELEMENT_TYPE et = trafo.GetElementType();
+          auto e = ElementTopology::GetEdges(et)[fnr];
+          int iavnums[] = { 0, 1, 2, 3 };
+          FlatArray<int> vnums(4, &iavnums[0]);
+          trafo.GetSort(vnums);
+          int invnums[4];
+          for (int i = 0; i < 4; i++)
+            invnums[iavnums[i]] = i;
+          if (invnums[e[0]] > invnums[e[1]])
+            res *= -1;
+        }
     }
+    
     virtual void GenerateCode(Code &code, FlatArray<int> inputs, int index) const override {
         string miptype;
         if(code.is_simd)
@@ -220,6 +240,9 @@ namespace ngfem
       using CoefficientFunctionNoDerivative::Evaluate;
     virtual void Evaluate (const SIMD_BaseMappedIntegrationRule & ir, BareSliceMatrix<SIMD<double>> values) const override
     {
+      if (consistent)
+        throw ExceptionNOSIMD("consistent tangent doest not support SIMD");
+      
       for (size_t i = 0; i < ir.Size(); i++)
         for (size_t j = 0; j < D; j++)
           values(j,i) = static_cast<const SIMD<DimMappedIntegrationPoint<D>>&>(ir[i]).GetTV()(j).Data();
@@ -236,16 +259,16 @@ namespace ngfem
   };
 
   
-  shared_ptr<CoefficientFunction> TangentialVectorCF (int dim)
+  shared_ptr<CoefficientFunction> TangentialVectorCF (int dim, bool consistent)
   {
     switch(dim)
       {
       case 1:
-        return make_shared<cl_TangentialVectorCF<1>>();
+        return make_shared<cl_TangentialVectorCF<1>>(consistent);
       case 2:
-        return make_shared<cl_TangentialVectorCF<2>>();
+        return make_shared<cl_TangentialVectorCF<2>>(consistent);
       default:
-        return make_shared<cl_TangentialVectorCF<3>>();
+        return make_shared<cl_TangentialVectorCF<3>>(consistent);
       }
   }
 
@@ -463,7 +486,190 @@ namespace ngfem
       }
   }
 
+
+  template <int D>
+  class cl_VertexTangentialVectorsCF : public CoefficientFunctionNoDerivative
+  {
+  public:
+    cl_VertexTangentialVectorsCF () : CoefficientFunctionNoDerivative(2*D,false)
+    {
+      SetDimensions(Array<int> ( { D, 2 } ));
+    }
+
+    using CoefficientFunctionNoDerivative::Evaluate;
+    virtual double Evaluate (const BaseMappedIntegrationPoint & ip) const override
+    {
+      return 0;
+    }
+    
+    virtual void Evaluate (const BaseMappedIntegrationPoint & ip, FlatVector<> res) const override
+    {
+      if (ip.DimSpace() != D)
+        throw Exception("illegal dim of VertexTangentialVector");
+
+      //cout << "in VertexTangentialVectorsCF, VB = " << ip.IP().VB() << endl;
+
+      if (ip.IP().VB() == BBND)
+        {
+          auto F = ip.GetJacobian();
+          // auto & trafo = ip.GetTransformation();
+          int vnr = ip.IP().FacetNr();
+          // auto pnt = ip.IP().Point();
+          //ELEMENT_TYPE et = trafo.GetElementType();
+          //int iavnums[] = { 0, 1, 2, 3 };
+          //FlatArray<int> vnums(4, &iavnums[0]);
+          //trafo.GetSort(vnums);
+
+	  //cout << "vnr = " << vnr << endl << "pnt = " << pnt << endl << endl;
+	  //cout << "F = " << F << endl;
+	  
+          Vec<2> tv_ref[] = { Vec<2>(1,0), Vec<2>(0,1), Vec<2>(-1,1) };
+          //Vec<2> tv_ref_v0[] = { -tv_ref[0], tv_ref[2] };
+          //Vec<2> tv_ref_v1[] = { -tv_ref[2], -tv_ref[1] };
+          //Vec<2> tv_ref_v2[] = { tv_ref[1], tv_ref[0] };
+          Vec<2> tv_ref_v [] = { -tv_ref[0], tv_ref[2], -tv_ref[2], -tv_ref[1], tv_ref[1], tv_ref[0] };
+
+	  FlatMatrix<double> phys_tv(D,2,&res[0]);
+	  Vec<D> tmp = F*tv_ref_v[2*vnr+0];
+          phys_tv.Col(0) = 1/L2Norm(tmp)*tmp;
+	  tmp = F*tv_ref_v[2*vnr+1];
+          phys_tv.Col(1) = 1/L2Norm(tmp)*tmp;
+
+	  //cout << "reft = " << tv_ref_v[2*vnr+0] << " | " << tv_ref_v[2*vnr+1] << endl;
+	  //cout << "physt = " << phys_tv << endl;
+        }
+      else //throw Exception();
+        res = 0.0;
+      
+    }
+    
+  };
+
+
+  shared_ptr<CoefficientFunction> VertexTangentialVectorsCF (int dim)
+  {
+    switch(dim)
+      {
+      case 1:
+        throw Exception ("no VertexTangentialVectors in 1D");
+      case 2:
+        return make_shared<cl_VertexTangentialVectorsCF<2>>();
+      default:
+        return make_shared<cl_VertexTangentialVectorsCF<3>>();
+      }
+  }
+
+
   
+  template <int D>
+  class cl_EdgeCurvatureCF : public CoefficientFunctionNoDerivative
+  {
+  public:
+    cl_EdgeCurvatureCF () : CoefficientFunctionNoDerivative(D,false) { ; }
+
+    using CoefficientFunctionNoDerivative :: Evaluate;
+    virtual double Evaluate (const BaseMappedIntegrationPoint & ip) const override
+    {
+      return 0;
+    }
+    
+    virtual void Evaluate (const BaseMappedIntegrationPoint & bmip, FlatVector<> res) const override
+    {
+      if (bmip.DimSpace() != D)
+        throw Exception("illegal dim of EdgeCurvatureCF");
+
+
+      // (nabla_t t)circ\phi = nabla(t\circ\phi) F^-1 t\circ\phi
+      //                     = nabla(t\circ\phi) F^-1 1/|F t_ref| F t_ref
+      //                     = 1/|F t_ref|*nabla(t\circ\phi) t_ref
+      //                     = 1/|F t_ref|*nabla(t\circ\phi) t_ref
+
+
+      if (bmip.IP().VB() == BND)
+        {
+	  const IntegrationPoint& ip = bmip.IP();
+	  const ElementTransformation & eltrans = bmip.GetTransformation();
+
+	  double eps = 1e-4;
+	  
+	  Vec<D> dshape;
+          auto mip = static_cast<const MappedIntegrationPoint<D-1,D>&>(bmip);
+          
+          auto F = bmip.GetJacobian();
+          auto & trafo = bmip.GetTransformation();
+	  ELEMENT_TYPE et = trafo.GetElementType();
+          auto e = ElementTopology::GetEdges(et)[bmip.IP().FacetNr()];
+	  
+
+	  Vec<2> pnts[3] = { { 1, 0 }, { 0, 1 } , { 0, 0 } };
+          Vec<2> tv_ref = pnts[e[1]] - pnts[e[0]];
+	  tv_ref /= L2Norm(tv_ref);
+
+          // compute |F t_ref|
+          Vec<D> tv_phys = F*tv_ref;
+          double measure = L2Norm(tv_phys);
+
+          // compute nabla(t\circ\phi) t_ref numerically
+          // This is the directional derivative in direction t_ref
+
+          IntegrationPoint ipl(ip);
+          ipl(0) -= tv_ref[0]*eps;
+          ipl(1) -= tv_ref[1]*eps;
+          IntegrationPoint ipr(ip);
+          ipr(0) += tv_ref[0]*eps;
+          ipr(1) += tv_ref[1]*eps;
+          IntegrationPoint ipll(ip);
+          ipll(0) -= 2*tv_ref[0]*eps;
+          ipll(1) -= 2*tv_ref[1]*eps;
+          IntegrationPoint iprr(ip);
+          iprr(0) += 2*tv_ref[0]*eps;
+          iprr(1) += 2*tv_ref[1]*eps;
+
+          MappedIntegrationPoint<2,D> sipl(ipl, eltrans);
+          MappedIntegrationPoint<2,D> sipr(ipr, eltrans);
+          MappedIntegrationPoint<2,D> sipll(ipll, eltrans);
+          MappedIntegrationPoint<2,D> siprr(iprr, eltrans);
+
+          // Need unit tangent vectors at the stencil points, not directly computed in MappedIntegrationPoint
+	  Mat<D,2> Ft = sipr.GetJacobian();
+	  Vec<D> tangr = Ft*tv_ref;
+	  tangr /= L2Norm(tangr);
+	  Ft = sipl.GetJacobian();
+	  Vec<D> tangl = Ft*tv_ref;
+	  tangl /= L2Norm(tangl);
+	  Ft = siprr.GetJacobian();
+	  Vec<D> tangrr = Ft*tv_ref;
+	  tangrr /= L2Norm(tangrr);
+	  Ft = sipll.GetJacobian();
+	  Vec<D> tangll = Ft*tv_ref;
+	  tangll /= L2Norm(tangll);
+
+          // nabla(t\circ\phi) t_ref
+          dshape = (1.0/(12.0*eps)) * (8.0*tangr-8.0*tangl-tangrr+tangll);
+       
+
+          res = 1/measure*dshape;
+        }
+      else //throw Exception();
+        res = 0.0;
+      
+    }
+    
+  };
+
+
+  shared_ptr<CoefficientFunction> EdgeCurvatureCF (int dim)
+  {
+    switch(dim)
+      {
+      case 1:
+        throw Exception ("no EdgeCurvature in 1D");
+      case 2:
+        return make_shared<cl_EdgeCurvatureCF<2>>();
+      default:
+        return make_shared<cl_EdgeCurvatureCF<3>>();
+      }
+  }
 }
 
 

@@ -1202,7 +1202,7 @@ namespace ngcomp
           {
             const auto& el = GetElement(ei);
             auto index = el.GetIndex();
-            for(const auto& edge : el.Edges())
+            for (auto edge : el.Edges())
               {
                 if(auto eindex = edgemap[edge]; eindex != -1)
                   {
@@ -2086,11 +2086,11 @@ namespace ngcomp
   }
   
   
-  void MeshAccess :: Refine ()
+  void MeshAccess :: Refine (bool onlyonce)
   {
     static Timer t("MeshAccess::Refine"); RegionTimer reg(t);
     nlevels = std::numeric_limits<int>::max();
-    mesh.Refine(NG_REFINE_H, &NGSolveTaskManager, &NGSolveTracer);
+    mesh.Refine(NG_REFINE_H, onlyonce, &NGSolveTaskManager, &NGSolveTracer);
     UpdateBuffers();
     updateSignal.Emit();
   }
@@ -2466,7 +2466,7 @@ namespace ngcomp
 #endif
 
 
-  function<void()> cleanup_func;
+  function<void()> cleanup_func = ProgressOutput :: SumUpLocal;
   ProgressOutput :: ProgressOutput (shared_ptr<MeshAccess> ama,
 				    string atask, size_t atotal)
     : ma(ama), comm(ama->GetCommunicator()), task(atask), total(atotal)
@@ -2484,7 +2484,7 @@ namespace ngcomp
     done_called = false;
     cnt = 0;
     thd_cnt = 0;
-    cleanup_func = [this] () {  this->SumUpLocal(); };
+    // cleanup_func = [this] () {  this->SumUpLocal(); };
     TaskManager::SetCleanupFunction(cleanup_func);
   }
 

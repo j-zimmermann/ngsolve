@@ -7,7 +7,9 @@
    Symbolic integrators
 */
 
+#include <variant>
 #include <fem.hpp>
+#include "integratorcf.hpp"
 
 namespace ngfem
 {
@@ -129,12 +131,17 @@ namespace ngfem
 
   shared_ptr<ProxyFunction> ProxyFunction :: GetAdditionalProxy (string name) const
   {
+    if (additional_proxies.Used(name))
+      if (auto sp = additional_proxies[name].lock())
+        return sp;
+    
     if (additional_diffops.Used(name))
       {
         auto adddiffop = make_shared<ProxyFunction> (fes, testfunction, is_complex, additional_diffops[name], nullptr, nullptr, nullptr, nullptr, nullptr);
         if (is_other)
           adddiffop->is_other = true;
         adddiffop -> primaryproxy = dynamic_pointer_cast<ProxyFunction>(const_cast<ProxyFunction*>(this)->shared_from_this());
+        additional_proxies.Set(name, adddiffop);
         return adddiffop;
       }
     return shared_ptr<ProxyFunction>();
@@ -563,7 +570,7 @@ namespace ngfem
     ProxyUserData * ud = (ProxyUserData*)mir.GetTransformation().userdata;
 
     assert (ud);
-    assert (ud->fel);
+    // assert (ud->fel);
 
     size_t np = mir.Size();
     size_t dim = Dimension();
@@ -594,7 +601,7 @@ namespace ngfem
     ProxyUserData * ud = (ProxyUserData*)mir.GetTransformation().userdata;
 
     assert (ud);
-    assert (ud->fel);
+    // assert (ud->fel);
 
     size_t np = mir.Size();
     size_t dim = Dimension();
@@ -5240,4 +5247,77 @@ namespace ngfem
           }
       }
   }
+
+
+  shared_ptr<BilinearFormIntegrator> Integral :: MakeBilinearFormIntegrator()
+  {
+    // check for DG terms
+    bool has_other = false;
+    cf->TraverseTree ([&has_other] (CoefficientFunction & cf)
+                      {
+                        if (dynamic_cast<ProxyFunction*> (&cf))
+                          if (dynamic_cast<ProxyFunction&> (cf).IsOther())
+                            has_other = true;
+                      });
+    if (has_other && (dx.element_vb != BND) && !dx.skeleton)
+      throw Exception("DG-facet terms need either skeleton=True or element_boundary=True");
+
+    shared_ptr<BilinearFormIntegrator> bfi;
+    if (!has_other && !dx.skeleton)
+      bfi = make_shared<SymbolicBilinearFormIntegrator> (cf, dx.vb, dx.element_vb);
+    else
+      bfi = make_shared<SymbolicFacetBilinearFormIntegrator> (cf, dx.vb, !dx.skeleton);
+    if (dx.definedon)
+      {
+        if (auto definedon_bitarray = get_if<BitArray> (&*dx.definedon); definedon_bitarray)
+          bfi->SetDefinedOn(*definedon_bitarray);
+        /*
+          // can't do that withouyt mesh
+        if (auto definedon_string = get_if<string> (&*dx.definedon); definedon_string)
+          {
+            Region reg(self.GetFESpace()->GetMeshAccess(), dx.vb, *definedon_string);
+            bfi->SetDefinedOn(reg.Mask());
+          }
+        */
+      }
+    bfi->SetDeformation(dx.deformation);               
+    bfi->SetBonusIntegrationOrder(dx.bonus_intorder);
+    if(dx.definedonelements)
+      bfi->SetDefinedOnElements(dx.definedonelements);
+    for (auto both : dx.userdefined_intrules)
+      bfi->SetIntegrationRule(both.first, *both.second);
+
+    return bfi;
+  }
+
+  shared_ptr<LinearFormIntegrator> Integral :: MakeLinearFormIntegrator()
+  {
+    shared_ptr<LinearFormIntegrator> lfi;
+    if (!dx.skeleton)
+      lfi =  make_shared<SymbolicLinearFormIntegrator> (cf, dx.vb, dx.element_vb);
+    else
+      lfi = make_shared<SymbolicFacetLinearFormIntegrator> (cf, dx.vb);
+    if (dx.definedon)
+      {
+        if (auto definedon_bitarray = get_if<BitArray> (&*dx.definedon); definedon_bitarray)
+          lfi->SetDefinedOn(*definedon_bitarray);
+        /*
+        // can't do that withouyt mesh
+        if (auto definedon_string = get_if<string> (&*dx.definedon); definedon_string)
+        {
+          Region reg(self->GetFESpace()->GetMeshAccess(), dx.vb, *definedon_string);
+          lfi->SetDefinedOn(reg.Mask());
+        }
+        */
+      }
+    lfi->SetDeformation(dx.deformation);
+    lfi->SetBonusIntegrationOrder(dx.bonus_intorder);
+    if(dx.definedonelements)
+      lfi->SetDefinedOnElements(dx.definedonelements);
+    for (auto both : dx.userdefined_intrules)
+      lfi->SetIntegrationRule(both.first, *both.second);
+    return lfi;
+  }
+
+
 }

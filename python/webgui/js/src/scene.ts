@@ -596,7 +596,7 @@ export class Scene {
     this.animate();
   }
 
-  initCanvas (element)
+  initCanvas (element, webgl_args)
   {
     this.element = element;
     var canvas = document.createElement( 'canvas' );
@@ -605,13 +605,13 @@ export class Scene {
 
     if (gl2) {
       console.log('webgl2 is supported!');
-      this.context = canvas.getContext( 'webgl2', { alpha: false } );
+      this.context = canvas.getContext( 'webgl2', { alpha: false, ...webgl_args } );
       this.have_webgl2 = true;
     }
     else
     {
       console.log('your browser/OS/drivers do not support WebGL2');
-      this.context = canvas.getContext( 'webgl', { alpha: false } );
+      this.context = canvas.getContext( 'webgl', { alpha: false, ...webgl_args } );
     }
 
     this.renderer = new THREE.WebGLRenderer( { canvas: canvas, context: this.context } );
@@ -709,8 +709,8 @@ export class Scene {
     this.version_object.appendChild(version_text)
 
     this.scene = new THREE.Scene();
-    if(window.matchMedia('(prefers-color-scheme: dark)').matches)
-      this.scene.background = new THREE.Color(0x292c2e);
+    // if(window.matchMedia('(prefers-color-scheme: dark)').matches)
+    //   this.scene.background = new THREE.Color(0x292c2e);
     this.axes_object = new THREE.AxesHelper(0.15);
     this.axes_object.matrixAutoUpdate = false;
 
@@ -1093,9 +1093,9 @@ export class Scene {
     this.animate();
   }
 
-  init(element, render_data)
+  init(element, render_data, webgl_args = {})
   {
-    this.initCanvas(element);
+    this.initCanvas(element, webgl_args);
     this.initRenderData(render_data);
   }
 
@@ -1841,8 +1841,8 @@ export class Scene {
 
     if(this.is_complex)
     {
-      uniforms.complex_scale.value.x = Math.cos(gui_status.Complex.phase);
-      uniforms.complex_scale.value.y = Math.sin(gui_status.Complex.phase);
+      uniforms.complex_scale.value.x = Math.cos(-gui_status.Complex.phase);
+      uniforms.complex_scale.value.y = Math.sin(-gui_status.Complex.phase);
     }
 
     if(gui_status.Vectors.show)

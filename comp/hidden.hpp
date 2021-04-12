@@ -1,28 +1,26 @@
-#ifndef FILE_DISCONTINUOUS_
-#define FILE_DISCONTINUOUS_
+#ifndef FILE_HIDDEN_
+#define FILE_HIDDEN_
 
 /*********************************************************************/
-/* File:   discontinuous.hpp                                         */
+/* File:   hidden.hpp                                                */
 /* Author: Joachim Schoeberl                                         */
-/* Date:   Jun 2019                                                  */
+/* Date:   Feb 2021                                                  */
 /*********************************************************************/
 
 namespace ngcomp
 {
 
- // A discontinuous wrapper class for fespaces 
+ // Hide all dofs of a space 
 
-  class DiscontinuousFESpace : public FESpace
+  class HiddenFESpace : public FESpace
   {
   protected:
-    Array<DofId> first_element_dof; 
     shared_ptr<FESpace> space;
-    VorB vb;
     
   public:
-    DiscontinuousFESpace (shared_ptr<FESpace> space, const Flags & flags);
+    HiddenFESpace (shared_ptr<FESpace> space, const Flags & flags);
     
-    virtual ~DiscontinuousFESpace () { ; }
+    virtual ~HiddenFESpace () { ; }
     void Update () override;
     
     void FinalizeUpdate() override
@@ -31,19 +29,10 @@ namespace ngcomp
       FESpace::FinalizeUpdate();
     }
 
-    virtual FlatArray<VorB> GetDualShapeNodes (VorB vb) const override
-    {
-      return space->GetDualShapeNodes(vb);
-    }
-
-
-    virtual string GetClassName() const override { return "Discontinuous" + space->GetClassName(); }
+    virtual string GetClassName() const override { return "Hidden" + space->GetClassName(); }
     shared_ptr<FESpace> GetBaseSpace() const { return space; }
     
     virtual FiniteElement & GetFE (ElementId ei, Allocator & alloc) const override;
-
-    // virtual size_t GetNDof () const override { return space->GetNDof(); }
-    // virtual size_t GetNDofLevel (int level) const override { return space->GetNDofLevel(level); }
 
     virtual void GetDofNrs (ElementId ei, Array<DofId> & dnums) const override;
     virtual void GetDofNrs (NodeId ni, Array<DofId> & dnums) const override;
@@ -79,4 +68,4 @@ namespace ngcomp
 }
 
 
-#endif // FILE_DISCONTINUOUS_
+#endif // FILE_HIDDEN_

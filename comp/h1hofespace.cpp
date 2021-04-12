@@ -868,6 +868,18 @@ into the wirebasket.
     return mu;
   }
 
+  FlatArray<VorB> H1HighOrderFESpace :: GetDualShapeNodes (VorB vb) const
+  {
+    static VorB nodes[] = { VOL, BND, BBND, BBBND };
+
+    if (first_edge_dof[0] == GetNDof())
+      return FlatArray<VorB> (1, &nodes[ma->GetDimension() - int(vb)]);
+    if (first_face_dof[0] == GetNDof())
+      return FlatArray<VorB> (2, &nodes[ma->GetDimension()-1 - int(vb)]);
+
+    return FlatArray<VorB> (ma->GetDimension()-int(vb)+1, &nodes[0]); 
+  }
+
   
   Timer tgetfe("H1FESpace::GetFE");
   FiniteElement & H1HighOrderFESpace :: GetFE (ElementId ei, Allocator & alloc) const
@@ -2315,11 +2327,28 @@ into the wirebasket.
         {
           Flags tmpflags = flags;
           if (flags.StringFlagDefined(dirnames[i]))
-            tmpflags.SetFlag ("dirichlet", flags.GetStringFlag(dirnames[i]));
+            {
+              auto dir = flags.GetStringFlag(dirnames[i]);
+              if(flags.StringFlagDefined("dirichlet"))
+                dir += "|" + flags.GetStringFlag("dirichlet");
+              // cout << "dirichlet = " << dir << endl;
+              // cout << "dirichlet flag = " << flags.GetStringFlag("dirichlet") << endl;
+              tmpflags.SetFlag ("dirichlet", dir);
+            }
           if (flags.StringFlagDefined(dirnames[i]+"_bbnd"))
-            tmpflags.SetFlag ("dirichlet_bbnd", flags.GetStringFlag(dirnames[i]+"_bbnd"));
+            {
+              auto dir = flags.GetStringFlag(dirnames[i]+"_bbnd");
+              if(flags.StringFlagDefined("dirichlet_bbnd"))
+                dir += "|" + flags.GetStringFlag("dirichlet_bbnd");
+              tmpflags.SetFlag ("dirichlet_bbnd", dir);
+            }
           if (flags.StringFlagDefined(dirnames[i]+"_bbbnd"))
-            tmpflags.SetFlag ("dirichlet_bbbnd", flags.GetStringFlag(dirnames[i]+"_bbbnd"));
+            {
+              auto dir = flags.GetStringFlag(dirnames[i]+"_bbbnd");
+              if(flags.StringFlagDefined("dirichlet_bbbnd"))
+                dir += "|" + flags.GetStringFlag("dirichlet_bbbnd");
+              tmpflags.SetFlag ("dirichlet_bbbnd", dir);
+            }
           AddSpace (make_shared<H1HighOrderFESpace> (ama, tmpflags));
         }
 
